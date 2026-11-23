@@ -1,0 +1,16 @@
+.venv/
+node_modules/
+web/node_modules/
+web/dist/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.fixforge/
+*.log
+*.tsbuildinfo
+.playwright/
+.npm-cache/
+web/.npm-cache/
+*.egg-info/
+docs/screenshots/counterfactual-v02.jpg
