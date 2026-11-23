@@ -5,7 +5,7 @@ def slots_overlap(first: tuple[int, int], second: tuple[int, int]) -> bool:
     """Return whether two half-open meeting intervals overlap."""
     first_start, first_end = first
     second_start, second_end = second
-    return first_start <= second_end and second_start <= first_end
+    return first_start < second_end and second_start < first_end
 
 
 def billable_minutes(minutes: int, increment: int = 15) -> int:
