@@ -16,12 +16,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fixforge.api import create_app
-from fixforge.config import Settings
+from fixforge.config import GitHubTarget, Settings
 from fixforge.fixtures import FIXTURES
 from fixforge.handoff import prepare_handoff
 from fixforge.sandbox import docker_available
 from fixforge.sandbox import run_tests as trusted_test_runner
 from fixforge.policy import REGRESSION_PATH
+from fixforge.publisher import _push_branch, run_git
 from fixforge.store import digest, verify_record
 
 
@@ -259,6 +260,33 @@ def test_handoff_rejects_ignored_python_missing_from_base_commit(pilot):
     with pytest.raises(ValueError, match="exactly the Python files verified"):
         prepare_handoff(settings, approved)
     assert not list((settings.data_dir / "handoffs").glob("*.zip"))
+
+
+@pytest.mark.parametrize("pilot", ["git"], indirect=True)
+def test_git_publisher_imports_the_approved_commit_and_only_creates_a_branch(pilot, monkeypatch):
+    client, root, run, settings = pilot
+    package, receipt = prepare_handoff(settings, approve(client, run))
+    remote = GitHubTarget("owner/project", "main")
+    pushes = []
+    before = git(root, "show-ref")
+
+    def inspect_push(work, *args, env, **kwargs):
+        if args[0] != "push":
+            return run_git(work, *args, env=env, **kwargs)
+        ref = f"refs/heads/{receipt['branch']}"
+        head = receipt["prepared_commit"]
+        assert git(work, "rev-list", "--parents", "-n", "1", head).decode().split() == [head, receipt["base_commit"]]
+        assert args == ("push", f"--force-with-lease={ref}:", "--", "https://github.com/owner/project.git", f"{head}:{ref}")
+        assert env["GIT_ALLOW_PROTOCOL"] == "https"
+        assert env["GIT_CONFIG_KEY_0"] == "http.https://github.com/owner/project.git.extraHeader"
+        assert env["GIT_CONFIG_VALUE_0"].startswith("Authorization: Basic ")
+        assert "test-only" not in " ".join(args)
+        pushes.append(head)
+
+    monkeypatch.setattr("fixforge.publisher.run_git", inspect_push)
+    _push_branch(root, package, receipt, remote, "test-only")
+    assert pushes == [receipt["prepared_commit"]]
+    assert git(root, "show-ref") == before and not git(root, "status", "--porcelain")
 
 
 @pytest.mark.parametrize("change", ["source", "new_file", "removed_file", "unregistered"])

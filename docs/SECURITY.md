@@ -8,7 +8,7 @@ FixForge v0.2 is a single-user loopback development application. It is not a hos
 2. **Control plane vs workload.** API and GitHub credentials stay in server environment. They are not injected into the test container. The planner has no executable tools and returns a bounded proposed edit.
 3. **Original checkout vs snapshot.** Browser requests select a server-registered repository ID. The engine reads a bounded copy; it does not write into the source checkout. Hidden paths, traversal, symlinks and known dependency/build directories are excluded.
 4. **Candidate vs verified patch.** Existing tests cannot be edited. A regression must fail on original production code, existing named tests must remain green, and the identical named suite must pass after changes. Restored-code replay must bring back the same failure signature. Failed or incomplete work cannot be approved or exported as verified evidence.
-5. **Verified patch vs publication.** A local decision binds the patch, source-identity and manifest digests. Repository approval revalidates source freshness and rejects changed or unregistered checkouts. No automatic push, PR or merge is implemented.
+5. **Verified patch vs publication.** A local decision binds the patch, source-identity and manifest digests. Repository approval revalidates source freshness and rejects changed or unregistered checkouts. The operator invokes publication separately using a repository allowlist and a scoped token. FixForge writes a repair branch and a draft only. The operator manages merge permissions and GitHub branch rules.
 
 ## Docker runner
 
@@ -33,7 +33,7 @@ No automatic deletion policy is implemented. The operator manages local data. Do
 - AST safety checks are heuristic and bypassable. They are a rejection filter, not a sandbox or a security proof.
 - New tests can be weak, irrelevant or manipulated despite fail-before/pass-after checks. Human review, hidden evaluation and an independent verifier remain necessary.
 - Failure classification rejects collection/import/environment and test-authoring errors as defect evidence. This is conservative, not a causal or semantic correctness proof. In-process Python tests can still tamper with Python internals; shared hostile workloads need stronger report isolation.
-- Git and content checks observe state at capture, evidence sealing and approval; they are not continuous locks. Publication must validate again.
+- Git and content checks observe state at capture, evidence sealing, approval and publication. The draft API can race a base update. FixForge checks the returned base and reports a mismatch for human review.
 - Evidence uses local hashes, not cryptographic signatures or external timestamping.
 - One local server/worker is assumed. Durable task leases, multi-process concurrency and authenticated users are not implemented.
 - Model/network errors are not retried. Restarted incomplete work is marked failed.

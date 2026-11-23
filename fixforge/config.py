@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -22,6 +23,23 @@ def load_env() -> None:
 
 
 @dataclass(frozen=True)
+class GitHubTarget:
+    repo: str
+    base: str
+
+    def __post_init__(self) -> None:
+        if (not isinstance(self.repo, str)
+                or not re.fullmatch(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9_.-]{1,100}", self.repo)
+                or self.repo.split("/")[1] in {".", ".."} or self.repo.lower().endswith(".git")):
+            raise ValueError("A GitHub target repository must use owner/repo format")
+        if (not isinstance(self.base, str)
+                or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9._/-]{0,199}", self.base)
+                or ".." in self.base or self.base.endswith(".")
+                or any(not part or part.startswith(".") or part.endswith(".lock") for part in self.base.split("/"))):
+            raise ValueError("A GitHub target base must be a valid branch name")
+
+
+@dataclass(frozen=True)
 class Settings:
     data_dir: Path
     api_key: str = ""
@@ -35,6 +53,8 @@ class Settings:
     inference_provider: InferenceProvider = "openai"
     ollama_model: str = DEFAULT_OLLAMA_MODEL
     ollama_timeout_seconds: int = 300
+    github_targets: dict[str, GitHubTarget] | None = None
+    github_publish_token: str = field(default="", repr=False)
 
     def __post_init__(self) -> None:
         if self.inference_provider not in {"openai", "ollama"}:
@@ -64,6 +84,12 @@ class Settings:
         repos = json.loads(os.getenv("FIXFORGE_REPOSITORIES", "{}"))
         if not isinstance(repos, dict):
             raise ValueError("FIXFORGE_REPOSITORIES must be a JSON object")
+        targets = json.loads(os.getenv("FIXFORGE_GITHUB_TARGETS", "{}"))
+        if not isinstance(targets, dict) or any(
+            key not in repos or not isinstance(target, dict) or set(target) != {"repo", "base"}
+            for key, target in targets.items()
+        ):
+            raise ValueError("FIXFORGE_GITHUB_TARGETS must map registered repository IDs to repo and base")
         return cls(
             data_dir=Path(os.getenv("FIXFORGE_DATA_DIR", str(ROOT / ".fixforge"))).resolve(),
             api_key=os.getenv("OPENAI_API_KEY", ""),
@@ -77,4 +103,6 @@ class Settings:
             inference_provider=os.getenv("FIXFORGE_INFERENCE_PROVIDER", "openai"),
             ollama_model=os.getenv("FIXFORGE_OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
             ollama_timeout_seconds=int(os.getenv("FIXFORGE_OLLAMA_TIMEOUT_SECONDS", "300")),
+            github_targets={key: GitHubTarget(**target) for key, target in targets.items()},
+            github_publish_token=os.getenv("FIXFORGE_GITHUB_PUBLISH_TOKEN", ""),
         )

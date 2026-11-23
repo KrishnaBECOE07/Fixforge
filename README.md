@@ -56,6 +56,7 @@ The app persists run history, test logs, source receipts and patch snapshots in 
 - Approval/rejection bound to the exact verified patch digest.
 - Downloads: unified `.patch`, full evidence `.json`, and a Markdown review description.
 - Local Git handoff for an approved repair at a clean commit, with the patch and evidence in one ZIP.
+- Explicit CLI publication of an approved repair to a configured GitHub branch as a draft pull request.
 - Local benchmark metrics with demo and AI run counts explicitly separated.
 
 ## Try a real repository
@@ -143,6 +144,24 @@ git show --stat $branch
 
 Git imports the branch while keeping the current checkout in place. See the [Git bundle reference](https://git-scm.com/docs/git-bundle) for its base-commit prerequisites.
 
+## Publish a GitHub draft
+
+1. Choose the GitHub repository and base branch for a registered checkout. The branch must point to the exact Git commit FixForge verifies. Start a fresh repair if it has moved.
+2. Create a fine-grained token scoped to that repository with **Contents** and **Pull requests** read/write. Put the token in your local `.env`. GitHub also supports an installation token with the same repository permissions. [Manage GitHub tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+
+   ```dotenv
+   FIXFORGE_GITHUB_TARGETS={"my-api":{"repo":"owner/my-api","base":"main"}}
+   FIXFORGE_GITHUB_PUBLISH_TOKEN=
+   ```
+
+3. Approve the verified repository repair in the workbench, then run the explicit publication command.
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m fixforge publish RUN_ID
+   ```
+
+FixForge creates an isolated repair branch and opens a draft PR with the verified base, prepared commit, patch digest and evidence digest. The local evidence archive stays on disk. Repeating the command reuses the matching PR. If the branch was pushed before GitHub confirmed the draft, the command can resume with the same commit. GitHub accepts a branch name for the base, so FixForge checks the base SHA in the returned draft as well. If the base moves during creation, FixForge reports the draft URL and the mismatch for review. [GitHub pull request API](https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request)
+
 ## Development
 
 Build the UI once before starting the Python server. During UI development, run the engine on port 8000 and Vite in a second terminal:
@@ -164,7 +183,7 @@ Tests execute the real fail-before/pass-after workflow and negative verification
 
 ## Deliberate boundaries
 
-This release does not clone arbitrary repositories, install repository dependencies, repair JavaScript, push branches, open GitHub PRs, merge code, or claim a general AI repair success rate. Approval and Git handoff preparation take place locally.
+Repository repair supports standard-library Python and `unittest`. Approval takes place locally. The explicit publish command creates a repair branch and a draft PR. Merging stays in GitHub's review workflow.
 
 Docker resource restrictions and static AST checks reduce risk; neither makes this suitable for executing hostile public repositories as a shared service. Review [the threat model](docs/SECURITY.md) before enabling real runs.
 
@@ -177,4 +196,4 @@ Docker resource restrictions and static AST checks reduce risk; neither makes th
 
 ## Technical references
 
-The integration contracts follow the official [OpenAI Responses reference](https://developers.openai.com/api/reference/resources/responses/methods/create), [Docker run documentation](https://docs.docker.com/engine/containers/run/), and [GitHub pull request API reference](https://docs.github.com/en/rest/pulls/pulls). GitHub PR creation is a planned milestone, not implemented behavior.
+The integration contracts follow the official [OpenAI Responses reference](https://developers.openai.com/api/reference/resources/responses/methods/create), [Docker run documentation](https://docs.docker.com/engine/containers/run/), and [GitHub pull request API reference](https://docs.github.com/en/rest/pulls/pulls).

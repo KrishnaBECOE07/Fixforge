@@ -201,4 +201,4 @@ def review_markdown(run: dict) -> str:
             f"Mode: {run['provider']}\nDecision: {(run.get('decision') or {}).get('action', 'pending')}\n\n"
             f"Provider usage: `{provider.get('usage')}`\n\n"
             "## Review notes\n\nPassing tests do not prove correctness. Check issue scope and edge cases. "
-            "This is a local review package; no branch was pushed and no pull request was opened.\n")
+            "This package records local verification. GitHub publication uses the separate publish command.\n")

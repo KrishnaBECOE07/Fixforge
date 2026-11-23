@@ -49,6 +49,7 @@ Run creation, record updates and review decisions use transactions. Review uses 
 | `proposals.py` | Strict structural output schema and local proposal type/size contract |
 | `provenance.py` | Git/status/source fingerprints and checkout freshness validation |
 | `handoff.py` | Approved repair to base-pinned Git commit, bundle and evidence ZIP |
+| `publisher.py` | Explicit GitHub branch and draft PR publication from an approved Git handoff |
 | `disclosure.py` | Exact source preview, credential pattern checks and review digest |
 | `verification.py` | Named-test identity, failure classification and counterfactual replay gates |
 | `providers.py` | Deterministic fixture recipes, local Ollama and OpenAI adapters, GitHub issue reader |
@@ -76,6 +77,8 @@ Each event is hashed over canonical JSON, sequence, timestamp, stage, title, det
 Approval checks the current run state, submitted patch digest and record integrity. For repository runs it rechecks source identity under the review transaction and rejects drift or an unregistered repository. The decision records source and manifest identities as well as the patch digest. The UI can export an intact verified run before or after review. A review package does not create a GitHub PR.
 
 The local `handoff` command additionally binds the approval to the verified commit. It checks that the clean base tree contains the Python files used in verification and that each committed blob matches the captured source. It assembles one child commit in a temporary bare repository, preserving existing file modes and LF or CRLF line endings on modified files. It checks the changed paths, revalidates source freshness, and atomically writes a ZIP containing the incremental Git bundle and review evidence. The commit uses the approval timestamp so it can be reproduced for the same run.
+
+The explicit `publish` command maps the approved run's registered repository to a configured GitHub repository and base branch. It imports the prepared bundle in a temporary repository and only creates a new remote repair ref or reuses the exact prepared commit already present. It rechecks the remote base before draft creation and verifies the returned GitHub base SHA. Retries look up the same head branch and evidence marker, including after ambiguous network failures. The PR contains digests and a link to the matching GitHub issue when available.
 
 Evidence v2 also binds issue metadata, root-cause explanation, source revision and the provider usage/limits receipt. Legacy v1 records remain inspectable; real-repository v1 approvals require a new run.
 
@@ -108,11 +111,11 @@ Keep this as a local application while building and validating the execution bou
 
 - [OpenAI Responses create](https://developers.openai.com/api/reference/resources/responses/methods/create): server-side HTTPS request, `store=false`, bounded output, JSON response.
 - [Docker run](https://docs.docker.com/engine/containers/run/): network, filesystem, user, capability and resource controls.
-- [GitHub issues](https://docs.github.com/en/rest/issues/issues): read issue details; no GitHub writes today.
-- [GitHub pull requests](https://docs.github.com/en/rest/pulls/pulls): planned draft-PR publisher.
+- [GitHub issues](https://docs.github.com/en/rest/issues/issues) for issue details.
+- [GitHub pull requests](https://docs.github.com/en/rest/pulls/pulls) for explicit draft creation.
 
 ## v0.2 inference boundary
 
 The Responses request uses a strict JSON schema for shape and rejects extra keys. Pydantic independently enforces local types, lengths and edit counts before policy checks or execution. Output and response bytes, selected context characters, request timeout and attempt count are bounded. Reported token usage is captured for successful, incomplete and schema-rejected responses when supplied by the provider; missing usage stays unknown. No dollar cap or live-model quality claim is implied.
 
-Freshness checks are point-in-time observations, not filesystem locks. A future branch publisher must recheck source/base identity at publication and handle races independently.
+Freshness checks observe local and remote state at specific points. GitHub's draft API accepts a base branch name, so a base update can race the POST. FixForge reports the draft URL and blocks a success result when GitHub returns a different base SHA.

@@ -1,5 +1,12 @@
 # Development log
 
+## 23 November 2026 — GitHub draft publisher
+
+- Added the explicit `python -m fixforge publish RUN_ID` command. It uses a configured repository and base branch, checks the approved source and exact GitHub base, and opens a draft from a new repair branch.
+- Covered duplicate prevention, retry after ambiguous responses, a changed target base, and a conflicting head through GitHub API mocks. A Git integration test imports the actual approved bundle and checks the branch push arguments.
+- All 143 automated tests passed with Docker enabled, and the production frontend build passed.
+- Published the scheduling fixture at `codex/scheduling-pilot` and checked its remote SHA through Git and the GitHub API. The live draft test awaits a repository-scoped publication token.
+
 ## 23 November 2026 — Git handoff for approved repairs
 
 - Added `python -m fixforge handoff RUN_ID`. It checks the recorded approval and evidence, verifies the clean Git base and its Python blobs, and places a reproducible single-commit branch in a ZIP with the patch and review evidence.

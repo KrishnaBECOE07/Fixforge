@@ -84,7 +84,7 @@ Registered the scheduling pilot as a clean local Git checkout. Added an exact so
 
 ### 23 November progress
 
-The first approved local Ollama patch passed all four Docker gates using an operator-supplied test. The local Git handoff builds the approved repair as one reproducible commit on its verified base and packages it with evidence. Draft PR publication is the next implementation step. Live publication and Linux CI require a remote repository.
+The first approved local Ollama patch passed all four Docker gates using an operator-supplied test. The local Git handoff builds the approved repair as one reproducible commit on its verified base and packages it with evidence. The public repository's first Windows, Linux and Docker CI jobs passed. The CLI draft publisher is implemented with tests for retry and stale-base handling. It still needs a live publication run against a configured GitHub target.
 
 ## 6. Prioritized backlog
 

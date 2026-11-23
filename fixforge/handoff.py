@@ -5,14 +5,15 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 from datetime import datetime
+from functools import partial
 from pathlib import Path
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+from tempfile import NamedTemporaryFile
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from .config import Settings
 from .engine import review_markdown
+from .git_transport import git_environment, isolated_repository, run_git
 from .intelligence import EXCLUDED, safe_path
 from .policy import REGRESSION_PATH
 from .provenance import capture_source
@@ -52,22 +53,10 @@ def prepare_handoff(settings: Settings, run: dict) -> tuple[Path, dict]:
     if approved_at.utcoffset() is None:
         raise ValueError("Approval timestamp must include a timezone")
     git_date = f"{int(approved_at.timestamp())} +0000"
-    env = {name: value for name, value in os.environ.items() if not name.upper().startswith("GIT_")}
-    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_NO_REPLACE_OBJECTS="1",
-               GIT_ALLOW_PROTOCOL="", GIT_NO_LAZY_FETCH="1", GIT_OPTIONAL_LOCKS="0",
-               GIT_AUTHOR_NAME="FixForge", GIT_AUTHOR_EMAIL="fixforge@localhost", GIT_AUTHOR_DATE=git_date,
+    env = git_environment()
+    env.update(GIT_AUTHOR_NAME="FixForge", GIT_AUTHOR_EMAIL="fixforge@localhost", GIT_AUTHOR_DATE=git_date,
                GIT_COMMITTER_NAME="FixForge", GIT_COMMITTER_EMAIL="fixforge@localhost", GIT_COMMITTER_DATE=git_date)
-
-    def git(cwd: Path, *args: str, data: bytes | None = None) -> bytes:
-        try:
-            result = subprocess.run(["git", "-c", "core.fsmonitor=false", "-c", "core.longpaths=true",
-                                     "-C", str(cwd), *args],
-                                    input=data, capture_output=True, env=env, timeout=30, check=False)
-        except (OSError, subprocess.TimeoutExpired):
-            raise ValueError(f"Could not run Git {args[0]}; check the Git installation and repository.") from None
-        if result.returncode != 0:
-            raise ValueError(f"Git {args[0]} failed while preparing the handoff.")
-        return result.stdout
+    git = partial(run_git, env=env)
 
     top_level = Path(os.fsdecode(git(repository, "rev-parse", "--show-toplevel").rstrip(b"\r\n")))
     if top_level.resolve() != repository.resolve():
@@ -76,20 +65,11 @@ def prepare_handoff(settings: Settings, run: dict) -> tuple[Path, dict]:
     if current["identity_sha256"] != revision["identity_sha256"]:
         raise ValueError("Repository changed since verification. Start a new repair from the intended base.")
     object_format = "sha1" if len(base) == 40 else "sha256"
-    objects = git(repository, "rev-parse", "--path-format=absolute", "--git-path", "objects").rstrip(b"\r\n")
-    if b"\n" in objects or b"\r" in objects:
-        raise ValueError("Git object directory path contains a newline")
-
     output = settings.data_dir / "handoffs"
     branch = f"codex/fixforge-{run_id}"
     ref = f"refs/heads/{branch}"
     destination = output / f"fixforge-{run_id}.zip"
-    with TemporaryDirectory(prefix="fixforge-git-") as temporary:
-        work = Path(temporary)
-        isolated = work / "repository.git"
-        git(work, "init", "--bare", "--template=", f"--object-format={object_format}", str(isolated))
-        # Read base objects through an alternate. All new objects, refs and index writes stay here.
-        (isolated / "objects" / "info" / "alternates").write_bytes(objects + b"\n")
+    with isolated_repository(repository, object_format, env) as isolated:
         tree = git(isolated, "ls-tree", "-rz", "--full-tree", base)
         tracked: dict[str, tuple[bytes, bytes]] = {}
         for entry in tree.split(b"\0")[:-1]:
@@ -136,7 +116,7 @@ def prepare_handoff(settings: Settings, run: dict) -> tuple[Path, dict]:
             raise ValueError("The prepared commit changed files outside the approved diff or omitted approved edits")
 
         git(isolated, "update-ref", ref, head)
-        bundle_path = work / "repair.bundle"
+        bundle_path = isolated.parent / "repair.bundle"
         git(isolated, "bundle", "create", str(bundle_path), ref, f"^{base}")
         git(isolated, "bundle", "verify", str(bundle_path))
         bundle = bundle_path.read_bytes()

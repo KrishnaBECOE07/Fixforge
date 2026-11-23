@@ -6,6 +6,7 @@ import uvicorn
 from .config import Settings, load_env
 from .handoff import prepare_handoff
 from .providers import check_ollama_model
+from .publisher import publish_repair
 from .sandbox import docker_available, resolve_docker_image
 from .store import Store
 
@@ -39,29 +40,36 @@ def check_pilot(settings: Settings) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run FixForge, check prerequisites, or prepare an approved repair.")
+    parser = argparse.ArgumentParser(description="Run FixForge, prepare an approved repair, or publish a GitHub draft.")
     commands = parser.add_subparsers(dest="command")
     commands.add_parser("serve", help="Start the local repair workbench")
     commands.add_parser("doctor", help="Check the local pilot prerequisites")
     handoff = commands.add_parser("handoff", help="Package an approved Git repair and its evidence")
     handoff.add_argument("run_id", help="ID of an approved repository repair")
+    publish = commands.add_parser("publish", help="Push an approved repair branch and open a GitHub draft PR")
+    publish.add_argument("run_id", help="ID of an approved repository repair")
     args = parser.parse_args()
     if args.command == "doctor":
         raise SystemExit(0 if check_pilot(Settings.from_env()) else 1)
-    if args.command == "handoff":
+    if args.command in {"handoff", "publish"}:
         settings = Settings.from_env()
         try:
             run = Store(settings.data_dir).get(args.run_id)
         except KeyError:
             raise SystemExit("Repair run not found") from None
         try:
-            path, receipt = prepare_handoff(settings, run)
+            if args.command == "publish":
+                result = publish_repair(settings, run)
+                label = "Existing pull request" if result["reused"] else "Draft pull request"
+                print(f"{label}: {result['url']}")
+            else:
+                path, receipt = prepare_handoff(settings, run)
+                print(f"Git handoff: {path}")
+                print(f"Base commit: {receipt['base_commit']}")
+                print(f"Prepared commit: {receipt['prepared_commit']}")
+                print(f"Branch: {receipt['branch']}")
         except (OSError, ValueError) as error:
             raise SystemExit(str(error)) from None
-        print(f"Git handoff: {path}")
-        print(f"Base commit: {receipt['base_commit']}")
-        print(f"Prepared commit: {receipt['prepared_commit']}")
-        print(f"Branch: {receipt['branch']}")
         return
     load_env()
     host = os.getenv("FIXFORGE_HOST", "127.0.0.1")
