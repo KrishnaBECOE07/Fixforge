@@ -22,6 +22,7 @@ from .fixtures import FIXTURES
 from .intelligence import index_repository
 from .providers import check_ollama_model, read_github_issue
 from .provenance import assert_source_current, capture_source
+from .publisher import preview_publication, publish_repair
 from .sandbox import docker_available
 from .store import Store, verify_record
 
@@ -50,12 +51,17 @@ class ReviewInput(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
+class PublicationInput(BaseModel):
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     store = Store(settings.data_dir)
     engine = Engine(settings, store)
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="fixforge")
     submission_lock = threading.Lock()
+    publication_lock = threading.Lock()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -205,6 +211,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(404, "Run not found") from None
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from None
+
+    @app.get("/api/runs/{run_id}/publication-preview")
+    def publication_preview(run_id: str):
+        try:
+            preview = preview_publication(settings, get_run(run_id))
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        return JSONResponse(preview, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/runs/{run_id}/publication")
+    def publication(run_id: str, data: PublicationInput):
+        run = get_run(run_id)
+        if not publication_lock.acquire(blocking=False):
+            raise HTTPException(409, "A GitHub publication is in progress. Try again when it finishes.")
+        try:
+            if data.sha256 != preview_publication(settings, run)["sha256"]:
+                raise HTTPException(409, "The publication details changed. Review them again before publishing.")
+            return publish_repair(settings, run)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        except OSError:
+            raise HTTPException(409, "Could not prepare the approved Git handoff. Check the local checkout and retry.") from None
+        finally:
+            publication_lock.release()
 
     @app.get("/api/runs/{run_id}/export/{kind}")
     def export(run_id: str, kind: Literal["patch", "evidence", "review"]):

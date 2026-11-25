@@ -1,5 +1,11 @@
 # Development log
 
+## 25 November 2026 — workbench draft publication
+
+- Added a publication preview for approved Git repairs. It shows the configured destination, verified base commit, repair branch, and patch and evidence digests. An explicit confirmation uses the same publisher as the CLI and returns the GitHub pull request link.
+- Tested approval and confirmation requirements, changed destinations, and cross-origin requests. Verified cancellation, retry, and the returned pull request link in Chrome with simulated GitHub responses. The Windows suite passed 143 tests, the separate four-gate Docker integration test passed, and the frontend production build passed.
+- The scheduling pilot has a configured GitHub base branch. Live draft publication awaits the repository-scoped token.
+
 ## 23 November 2026 — GitHub draft publisher
 
 - Added the explicit `python -m fixforge publish RUN_ID` command. It uses a configured repository and base branch, checks the approved source and exact GitHub base, and opens a draft from a new repair branch.

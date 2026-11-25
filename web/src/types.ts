@@ -33,6 +33,11 @@ export type SourcePreview = {
   input: {issue: {title: string; body: string}; supplied_regression?: string;
     untrusted_repository: {path: string; source: string}[]};
 }
+export type PublicationPreview = {
+  repo: string; base: string; base_commit: string; branch: string;
+  patch_sha256: string; evidence_sha256: string; sha256: string;
+}
+export type Publication = {url: string; number: number; state: 'open' | 'closed'; draft: boolean; reused: boolean}
 export type Fixture = {id: string; repo: string; number: number; title: string; body: string; tags: string[]}
 export type Config = {version?: string; model: string; ai_provider: InferenceProvider; ai_configured: boolean; repositories: string[]; scope: string; github_configured: boolean;
   limits?: {context_chars: number; output_tokens: number; provider_timeout_seconds: number; attempts: number}}
