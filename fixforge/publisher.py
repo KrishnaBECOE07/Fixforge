@@ -7,6 +7,7 @@ import http.client
 import json
 import re
 from pathlib import Path
+from time import sleep
 from urllib.parse import quote, urlencode
 from zipfile import BadZipFile, ZipFile
 
@@ -34,6 +35,10 @@ class GitHubAPI:
             with connection.getresponse() as response:
                 if response.status == 404 and missing_ok:
                     return None
+                if response.status == 403 and method == "POST" and path == "/pulls":
+                    if b"Resource not accessible by personal access token" in response.read(4096):
+                        raise ValueError("GitHub denied draft creation. Grant the publication token read and write "
+                                         "access to Pull requests on the configured repository.")
                 if response.status != (201 if method == "POST" else 200):
                     raise ValueError(f"GitHub {method} returned HTTP {response.status}. "
                                      "Check the configured repository and publication permissions.")
@@ -127,9 +132,13 @@ def publish_repair(settings: Settings, run: dict) -> dict:
         try:
             _push_branch(repository, package, receipt, target, token)
         except ValueError:
-            if api.branch_sha(branch) != head:
+            remote_head = _confirm_pushed_branch(api, branch)
+            if remote_head != head:
                 raise
-        remote_head = api.branch_sha(branch)
+        else:
+            remote_head = _confirm_pushed_branch(api, branch)
+    if remote_head is None:
+        raise ValueError("GitHub has not confirmed the repair branch yet. Retry publication to check its status.")
     if remote_head != head:
         raise ValueError("The GitHub repair branch does not point to the approved commit.")
     assert_source_current(repository, run.get("source_revision"))
@@ -144,6 +153,17 @@ def publish_repair(settings: Settings, run: dict) -> dict:
             raise
         return _publication(existing, target, receipt, marker, reused=True)
     return _publication(draft, target, receipt, marker, reused=False)
+
+
+def _confirm_pushed_branch(api: GitHubAPI, branch: str) -> str | None:
+    # GitHub can briefly return 404 from the refs API after Git accepts a push.
+    sha = api.branch_sha(branch)
+    for delay in (1, 2, 4):
+        if sha is not None:
+            break
+        sleep(delay)
+        sha = api.branch_sha(branch)
+    return sha
 
 
 def _publication(pull: dict, target: GitHubTarget, receipt: dict, marker: str, *, reused: bool) -> dict:

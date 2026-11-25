@@ -42,6 +42,10 @@ def publication(tmp_path, monkeypatch):
             calls.append((method, url.path))
             if method == "GET" and url.path.startswith("/git/ref/heads/"):
                 branch = url.path.removeprefix("/git/ref/heads/")
+                if branch == BRANCH and branch in refs and state.get("hidden_reads", 0):
+                    state["hidden_reads"] -= 1
+                    self.response = Response(404, {})
+                    return
                 self.response = (Response(200, {"ref": f"refs/heads/{branch}",
                                                "object": {"type": "commit", "sha": refs[branch]}})
                                  if branch in refs else Response(404, {}))
@@ -55,6 +59,9 @@ def publication(tmp_path, monkeypatch):
                 assert payload["base"] == "main" and payload["head"] == BRANCH and payload["draft"] is True
                 assert "Private issue text" not in payload["body"]
                 assert "Related issue #5." in payload["body"]
+                if state.get("draft_denied"):
+                    self.response = Response(403, {"message": "Resource not accessible by personal access token"})
+                    return
                 pull = dict(number=9, state="open", draft=True, body=payload["body"],
                             base=dict(ref="main", sha=state.get("created_base", BASE), repo={"full_name": REPO}),
                             head=dict(ref=BRANCH, sha=HEAD, repo={"full_name": REPO}))
@@ -79,6 +86,7 @@ def publication(tmp_path, monkeypatch):
     monkeypatch.setattr("fixforge.publisher.prepare_handoff", lambda *_: (tmp_path / "handoff.zip", RECEIPT))
     monkeypatch.setattr("fixforge.publisher.assert_source_current", lambda *_: None)
     monkeypatch.setattr("fixforge.publisher._push_branch", push)
+    monkeypatch.setattr("fixforge.publisher.sleep", lambda _: None)
     return settings, run, refs, pulls, calls, state
 
 
@@ -115,6 +123,33 @@ def test_retry_handles_concurrent_branch_and_draft_creation(publication):
     state.update(branch_race=True, creation_race=True)
     assert publish_repair(settings, run)["reused"] is True
     assert len(pulls) == 1 and calls.count(("POST", "/pulls")) == 1
+
+
+@pytest.mark.parametrize("branch_race", [False, True])
+def test_draft_waits_for_pushed_branch_to_appear(publication, branch_race):
+    settings, run, _, pulls, calls, state = publication
+    state.update(hidden_reads=2, branch_race=branch_race)
+    assert publish_repair(settings, run)["draft"] is True
+    assert len(pulls) == 1 and calls.count(("PUSH", BRANCH)) == 1
+    assert calls.count(("GET", f"/git/ref/heads/{BRANCH}")) == 4
+
+
+def test_retry_reuses_the_pushed_branch_after_visibility_timeout(publication):
+    settings, run, _, pulls, calls, state = publication
+    state["hidden_reads"] = 4
+    with pytest.raises(ValueError, match="has not confirmed the repair branch yet"):
+        publish_repair(settings, run)
+    assert not pulls
+    assert publish_repair(settings, run)["draft"] is True
+    assert calls.count(("PUSH", BRANCH)) == calls.count(("POST", "/pulls")) == 1
+
+
+def test_draft_permission_error_identifies_the_required_access(publication):
+    settings, run, refs, pulls, _, state = publication
+    state["draft_denied"] = True
+    with pytest.raises(ValueError, match="read and write access to Pull requests"):
+        publish_repair(settings, run)
+    assert refs[BRANCH] == HEAD and not pulls
 
 
 def test_moved_base_in_creation_response_never_reports_success(publication):
