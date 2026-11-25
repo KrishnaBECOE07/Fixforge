@@ -86,6 +86,10 @@ Registered the scheduling pilot as a clean local Git checkout. Added an exact so
 
 The first approved local Ollama patch passed all four Docker gates using an operator-supplied test. The local Git handoff builds the approved repair as one reproducible commit on its verified base and packages it with evidence. The public repository's first Windows, Linux and Docker CI jobs passed. The CLI draft publisher is implemented with tests for retry and stale-base handling. It still needs a live publication run against a configured GitHub target.
 
+### 25 November progress
+
+The workbench can review and confirm publication to a configured GitHub destination. The approved scheduling repair became [draft PR #2](https://github.com/KrishnaBECOE07/Fixforge/pull/2) at the verified base commit. Repeating publication returned the same draft. The scheduling pilot used a fine-grained token and an operator-supplied issue and regression.
+
 ## 6. Prioritized backlog
 
 ### P0 — before trusting a real pilot
