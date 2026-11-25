@@ -12,8 +12,9 @@ from zipfile import BadZipFile, ZipFile
 
 from .config import GitHubTarget, Settings
 from .git_transport import git_environment, isolated_repository, run_git
-from .handoff import prepare_handoff
+from .handoff import approved_base, prepare_handoff, repair_branch
 from .provenance import assert_source_current
+from .store import digest
 
 
 class GitHubAPI:
@@ -73,13 +74,30 @@ class GitHubAPI:
                                                      title=title, body=body))
 
 
-def publish_repair(settings: Settings, run: dict) -> dict:
+def _publication_target(settings: Settings, run: dict) -> GitHubTarget:
     target = (settings.github_targets or {}).get(run.get("repository_id"))
     if target is None:
         raise ValueError("Configure a GitHub publication target for this registered repository")
-    token = settings.github_publish_token
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", token):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", settings.github_publish_token):
         raise ValueError("Set a valid FIXFORGE_GITHUB_PUBLISH_TOKEN locally")
+    return target
+
+
+def preview_publication(settings: Settings, run: dict) -> dict:
+    base_commit = approved_base(run)
+    target = _publication_target(settings, run)
+    branch = repair_branch(run["id"])
+    if target.base == branch or len(base_commit) != 40:
+        raise ValueError("GitHub publication requires a separate target branch and a SHA-1 Git base")
+    evidence = run["evidence"]
+    preview = dict(repo=target.repo, base=target.base, base_commit=base_commit, branch=branch,
+                   patch_sha256=evidence["patch_sha256"], evidence_sha256=evidence["manifest_sha256"])
+    return {**preview, "sha256": digest({**preview, "run_id": run["id"], "decision": run["decision"]})}
+
+
+def publish_repair(settings: Settings, run: dict) -> dict:
+    target = _publication_target(settings, run)
+    token = settings.github_publish_token
     package, receipt = prepare_handoff(settings, run)
     branch, base, head = receipt["branch"], receipt["base_commit"], receipt["prepared_commit"]
     if target.base == branch or len(base) != 40:

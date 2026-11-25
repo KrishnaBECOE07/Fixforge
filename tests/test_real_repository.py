@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import time
+from dataclasses import replace
 from zipfile import ZipFile
 
 import pytest
@@ -196,6 +197,55 @@ def approve(client, run):
                            json={"decision": "approve", "patch_sha256": run["evidence"]["patch_sha256"]})
     assert response.status_code == 200
     return response.json()
+
+
+@pytest.mark.parametrize("pilot", ["git"], indirect=True)
+def test_workbench_publication_requires_approval_and_exact_destination(pilot, monkeypatch):
+    client, _, run, settings = pilot
+    path = f"/api/runs/{run['id']}"
+    target = GitHubTarget("owner/project", "main")
+    targets = {"pilot": target}
+    configured = replace(settings, github_targets=targets, github_publish_token="test-publisher-token")
+    result = dict(url="https://github.com/owner/project/pull/9", number=9, state="open", draft=True, reused=False)
+    calls = []
+
+    def publish(publication_settings, approved_run):
+        calls.append((publication_settings, approved_run["id"]))
+        assert approved_run["status"] == "approved"
+        return result
+
+    monkeypatch.setattr("fixforge.api.publish_repair", publish)
+    with TestClient(create_app(configured)) as workbench:
+        assert workbench.get(f"{path}/publication-preview").status_code == 409
+        assert workbench.post(f"{path}/publication", json={"sha256": "0" * 64}).status_code == 409
+        approved = approve(client, run)
+        response = workbench.get(f"{path}/publication-preview")
+        assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
+        assert "test-publisher-token" not in response.text
+        preview = response.json()
+        assert preview["repo"] == target.repo and preview["base"] == target.base
+        assert preview["branch"] == f"codex/fixforge-{run['id']}"
+        assert preview["base_commit"] == approved["source_revision"]["commit"]
+        assert preview["patch_sha256"] == approved["evidence"]["patch_sha256"]
+        assert preview["evidence_sha256"] == approved["evidence"]["manifest_sha256"]
+        confirmation = {"sha256": preview["sha256"]}
+        targets["pilot"] = GitHubTarget(target.repo, "release")
+        changed = workbench.post(f"{path}/publication", json=confirmation)
+        assert changed.status_code == 409 and "details changed" in changed.json()["detail"]
+        targets["pilot"] = target
+        assert workbench.post(f"{path}/publication", json={}).status_code == 422
+        assert workbench.post(f"{path}/publication", json=confirmation,
+                              headers={"origin": "https://other.example"}).status_code == 403
+        assert not calls
+        assert workbench.post(f"{path}/publication", json=confirmation).json() == result
+        assert calls == [(configured, run["id"])]
+
+    with TestClient(create_app(replace(configured, github_publish_token=""))) as unconfigured:
+        missing_token = unconfigured.get(f"{path}/publication-preview")
+        assert missing_token.status_code == 409
+        assert "FIXFORGE_GITHUB_PUBLISH_TOKEN" in missing_token.json()["detail"]
+        assert unconfigured.post(f"{path}/publication", json=confirmation).status_code == 409
+        assert calls == [(configured, run["id"])]
 
 
 @pytest.mark.parametrize("pilot", ["git", "git-crlf"], indirect=True)

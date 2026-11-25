@@ -20,7 +20,7 @@ from .provenance import capture_source
 from .store import digest, verify_record
 
 
-def prepare_handoff(settings: Settings, run: dict) -> tuple[Path, dict]:
+def approved_base(run: dict) -> str:
     run_id = run["id"]
     if not re.fullmatch(r"[0-9a-f]{12}", run_id):
         raise ValueError("Invalid repair ID")
@@ -42,6 +42,19 @@ def prepare_handoff(settings: Settings, run: dict) -> tuple[Path, dict]:
         isinstance(base, str) and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", base)
     ):
         raise ValueError("Prepare the repair from a clean Git checkout with a base commit")
+    return base
+
+
+def repair_branch(run_id: str) -> str:
+    return f"codex/fixforge-{run_id}"
+
+
+def prepare_handoff(settings: Settings, run: dict) -> tuple[Path, dict]:
+    base = approved_base(run)
+    run_id = run["id"]
+    revision = run["source_revision"]
+    evidence = run["evidence"]
+    decision = run["decision"]
     repository = (settings.repositories or {}).get(run.get("repository_id"))
     if repository is None:
         raise ValueError("The repair repository is no longer registered")
@@ -66,7 +79,7 @@ def prepare_handoff(settings: Settings, run: dict) -> tuple[Path, dict]:
         raise ValueError("Repository changed since verification. Start a new repair from the intended base.")
     object_format = "sha1" if len(base) == 40 else "sha256"
     output = settings.data_dir / "handoffs"
-    branch = f"codex/fixforge-{run_id}"
+    branch = repair_branch(run_id)
     ref = f"refs/heads/{branch}"
     destination = output / f"fixforge-{run_id}.zip"
     with isolated_repository(repository, object_format, env) as isolated:

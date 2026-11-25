@@ -56,7 +56,7 @@ The app persists run history, test logs, source receipts and patch snapshots in 
 - Approval/rejection bound to the exact verified patch digest.
 - Downloads: unified `.patch`, full evidence `.json`, and a Markdown review description.
 - Local Git handoff for an approved repair at a clean commit, with the patch and evidence in one ZIP.
-- Explicit CLI publication of an approved repair to a configured GitHub branch as a draft pull request.
+- Explicit publication of an approved repair to GitHub as a draft pull request from the workbench or CLI.
 - Local benchmark metrics with demo and AI run counts explicitly separated.
 
 ## Try a real repository
@@ -154,13 +154,15 @@ Git imports the branch while keeping the current checkout in place. See the [Git
    FIXFORGE_GITHUB_PUBLISH_TOKEN=
    ```
 
-3. Approve the verified repository repair in the workbench, then run the explicit publication command.
+3. Restart the workbench after changing `.env`. On an approved Git repair, select **Review GitHub destination**, confirm the repository, base, and patch, then select **Publish draft PR**. The workbench shows the pull request link after GitHub confirms it.
+
+   To publish from the CLI, run:
 
    ```powershell
    .\.venv\Scripts\python.exe -m fixforge publish RUN_ID
    ```
 
-FixForge creates an isolated repair branch and opens a draft PR with the verified base, prepared commit, patch digest and evidence digest. The local evidence archive stays on disk. Repeating the command reuses the matching PR. If the branch was pushed before GitHub confirmed the draft, the command can resume with the same commit. GitHub accepts a branch name for the base, so FixForge checks the base SHA in the returned draft as well. If the base moves during creation, FixForge reports the draft URL and the mismatch for review. [GitHub pull request API](https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request)
+FixForge creates an isolated repair branch and opens a draft PR with the verified base, prepared commit, patch digest and evidence digest. The local evidence archive stays on disk. Repeating publication reuses the matching PR. If the branch was pushed before GitHub confirmed the draft, publication can resume with the same commit. GitHub accepts a branch name for the base, so FixForge checks the base SHA in the returned draft as well. If the base moves during creation, FixForge reports the draft URL and the mismatch for review. [GitHub pull request API](https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request)
 
 ## Development
 

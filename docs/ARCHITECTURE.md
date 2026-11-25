@@ -19,6 +19,8 @@ flowchart LR
     Runner --> Evidence[Hashes / logs / event chain]
     Evidence --> Review[Exact-patch human review]
     Review --> Export[Patch / evidence / review Markdown]
+    Review --> Confirm[Confirm GitHub destination]
+    Confirm --> Publisher[GitHub draft PR]
 ```
 
 Docker is mandatory for repository and AI runs. The curated demo uses fixed project-owned code and deterministic edits in local Python. Demo issue descriptions never become executable instructions.
@@ -78,7 +80,7 @@ Approval checks the current run state, submitted patch digest and record integri
 
 The local `handoff` command additionally binds the approval to the verified commit. It checks that the clean base tree contains the Python files used in verification and that each committed blob matches the captured source. It assembles one child commit in a temporary bare repository, preserving existing file modes and LF or CRLF line endings on modified files. It checks the changed paths, revalidates source freshness, and atomically writes a ZIP containing the incremental Git bundle and review evidence. The commit uses the approval timestamp so it can be reproduced for the same run.
 
-The explicit `publish` command maps the approved run's registered repository to a configured GitHub repository and base branch. It imports the prepared bundle in a temporary repository and only creates a new remote repair ref or reuses the exact prepared commit already present. It rechecks the remote base before draft creation and verifies the returned GitHub base SHA. Retries look up the same head branch and evidence marker, including after ambiguous network failures. The PR contains digests and a link to the matching GitHub issue when available.
+The workbench and `publish` command use the same GitHub publisher. The workbench first previews the repository, base branch and commit, repair branch, and approved digests without contacting GitHub. The confirmation is bound to the displayed details and the approval record. The publisher imports the prepared bundle in a temporary repository and only creates a new remote repair ref or reuses the exact prepared commit already present. It rechecks the remote base before draft creation and verifies the returned GitHub base SHA. Retries look up the same head branch and evidence marker, including after ambiguous network failures. The PR contains digests and a link to the matching GitHub issue when available.
 
 Evidence v2 also binds issue metadata, root-cause explanation, source revision and the provider usage/limits receipt. Legacy v1 records remain inspectable; real-repository v1 approvals require a new run.
 
