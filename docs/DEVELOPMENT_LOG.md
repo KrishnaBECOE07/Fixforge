@@ -4,7 +4,8 @@
 
 - Added a publication preview for approved Git repairs. It shows the configured destination, verified base commit, repair branch, and patch and evidence digests. An explicit confirmation uses the same publisher as the CLI and returns the GitHub pull request link.
 - Tested approval and confirmation requirements, changed destinations, and cross-origin requests. Verified cancellation, retry, and the returned pull request link in Chrome with simulated GitHub responses. The Windows suite passed 143 tests, the separate four-gate Docker integration test passed, and the frontend production build passed.
-- The scheduling pilot has a configured GitHub base branch. Live draft publication awaits the repository-scoped token.
+- FixForge now waits briefly for GitHub's refs API to see a successful push before opening the draft. The publisher update passed the Windows, Ubuntu, and Docker CI jobs.
+- Published the approved scheduling repair through the workbench API to [draft PR #2](https://github.com/KrishnaBECOE07/Fixforge/pull/2). GitHub returned the verified base `3062a02` and prepared commit `61f69fd`. A second publication request returned the same draft.
 
 ## 23 November 2026 — GitHub draft publisher
 
