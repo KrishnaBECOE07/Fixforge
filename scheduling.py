@@ -9,9 +9,11 @@ def slots_overlap(first: tuple[int, int], second: tuple[int, int]) -> bool:
 
 
 def billable_minutes(minutes: int, increment: int = 15) -> int:
-    """Round a nonnegative duration up to the next billing increment."""
+    """Round a nonnegative duration up to the next billing increment, preserving exact multiples."""
     if minutes < 0 or increment < 1:
         raise ValueError("Duration and increment must be valid")
+    if minutes % increment == 0:
+        return minutes
     return (minutes // increment + 1) * increment
 
 
