@@ -1,5 +1,11 @@
 # Development log
 
+## 26 November 2026 — GitHub issue intake
+
+- The issue reader checks the GitHub repository configured for the selected checkout and verifies the canonical issue returned by GitHub. Source review links to the imported issue. A published draft only references an issue that matches the verified repository and issue number.
+- Added regression coverage for mismatched repositories, transferred issues, pull request URLs, and publication links that disagree with the verified record.
+- The Windows suite passed 153 tests. The frontend production build passed.
+
 ## 25 November 2026 — workbench draft publication
 
 - Added a publication preview for approved Git repairs. It shows the configured destination, verified base commit, repair branch, and patch and evidence digests. An explicit confirmation uses the same publisher as the CLI and returns the GitHub pull request link.

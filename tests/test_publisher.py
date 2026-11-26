@@ -18,7 +18,8 @@ RECEIPT = dict(run_id="123456789abc", base_commit=BASE, prepared_commit=HEAD, br
 
 @pytest.fixture
 def publication(tmp_path, monkeypatch):
-    run = dict(repository_id="pilot", issue_url=f"https://github.com/{REPO}/issues/5", body="Private issue text")
+    run = dict(repository_id="pilot", repo="owner / project", number=5,
+               issue_url=f"https://github.com/{REPO}/issues/5", body="Private issue text")
     settings = Settings(data_dir=tmp_path, repositories={"pilot": tmp_path},
                         github_targets={"pilot": GitHubTarget(REPO, "main")}, github_publish_token="test-only")
     calls = []
@@ -58,7 +59,10 @@ def publication(tmp_path, monkeypatch):
                 payload = json.loads(body)
                 assert payload["base"] == "main" and payload["head"] == BRANCH and payload["draft"] is True
                 assert "Private issue text" not in payload["body"]
-                assert "Related issue #5." in payload["body"]
+                if state.get("omit_issue"):
+                    assert "Related issue #" not in payload["body"]
+                else:
+                    assert "Related issue #5." in payload["body"]
                 if state.get("draft_denied"):
                     self.response = Response(403, {"message": "Resource not accessible by personal access token"})
                     return
@@ -99,6 +103,13 @@ def test_draft_publication_and_retry_reuse_the_same_pr(publication):
     assert publish_repair(settings, run) == {**initial, "state": "closed", "reused": True}
     assert refs == {"main": BASE, BRANCH: HEAD}
     assert calls.count(("PUSH", BRANCH)) == calls.count(("POST", "/pulls")) == 1
+
+
+def test_publication_omits_issue_url_if_it_conflicts_with_the_verified_issue(publication):
+    settings, run, _, _, _, state = publication
+    run["issue_url"] = f"https://github.com/{REPO}/issues/6"
+    state["omit_issue"] = True
+    assert publish_repair(settings, run)["draft"] is True
 
 
 @pytest.mark.parametrize("condition, expected_pushes", [

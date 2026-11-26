@@ -110,7 +110,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                       number=None, repository_id=data.repository_id, fixture_id=None, tags=["AI repair"])
         if data.issue_url.strip():
             try:
-                values.update(read_github_issue(data.issue_url.strip(), settings.github_token))
+                target = (settings.github_targets or {}).get(data.repository_id)
+                values.update(read_github_issue(data.issue_url.strip(), settings.github_token,
+                                                expected_repo=target.repo if target else None))
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from None
         if not values["title"].strip() or not values["body"].strip():

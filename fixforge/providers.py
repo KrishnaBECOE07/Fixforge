@@ -186,23 +186,50 @@ def propose_ollama(settings: Settings, disclosure: dict) -> dict:
     return parse_response_proposal(message["content"], record, regression)
 
 
-def read_github_issue(url: str, token: str = "") -> dict:
+def _github_issue_parts(url: str) -> tuple[str, str, str]:
     match = re.fullmatch(r"https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/([1-9][0-9]*)(?:/)?", url)
     if not match or any(p in {".", ".."} for p in match.groups()[:2]):
         raise ValueError("Use a GitHub issue URL: https://github.com/owner/repo/issues/123")
-    owner, repo, number = match.groups()
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "FixForge/0.1"}
+    return match[1], match[2], match[3]
+
+
+def read_github_issue(url: str, token: str = "", *, expected_repo: str | None = None) -> dict:
+    owner, repo, number = _github_issue_parts(url)
+    if expected_repo is not None and f"{owner}/{repo}".lower() != expected_repo.lower():
+        raise ValueError(f"Select a checkout configured for this issue's repository or use an issue from {expected_repo}.")
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "FixForge",
+               "X-GitHub-Api-Version": "2026-03-10"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(f"https://api.github.com/repos/{owner}/{repo}/issues/{number}", headers=headers)
+    connection = http.client.HTTPSConnection("api.github.com", timeout=15)
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
-            issue = json.loads(response.read(100_000))
-    except urllib.error.HTTPError as exc:
-        raise ValueError(f"GitHub returned HTTP {exc.code}. Check issue access and rate limits.") from None
-    except (urllib.error.URLError, TimeoutError):
+        connection.request("GET", f"/repos/{owner}/{repo}/issues/{number}", headers=headers)
+        with connection.getresponse() as response:
+            if response.status in {301, 302, 307, 308}:
+                raise ValueError("This GitHub issue URL has moved. Open the issue and use its current URL.")
+            if response.status != 200:
+                raise ValueError(f"GitHub returned HTTP {response.status}. Check issue access and rate limits.")
+            raw = response.read(MAX_RESPONSE_BYTES + 1)
+        if len(raw) > MAX_RESPONSE_BYTES:
+            raise ValueError("GitHub returned an oversized issue response.")
+        issue = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeError):
+        raise ValueError("GitHub returned invalid issue data.") from None
+    except (OSError, http.client.HTTPException):
         raise ValueError("Could not reach GitHub before the request deadline") from None
+    finally:
+        connection.close()
+    if not isinstance(issue, dict):
+        raise ValueError("GitHub returned invalid issue data.")
     if "pull_request" in issue:
         raise ValueError("This URL identifies a pull request rather than an issue")
-    return dict(title=issue["title"], body=(issue.get("body") or "")[:20_000],
-                repo=f"{owner} / {repo}", number=int(number), issue_url=url)
+    canonical, issue_number = issue.get("html_url"), issue.get("number")
+    title, body = issue.get("title"), issue.get("body")
+    if (not isinstance(canonical, str) or type(issue_number) is not int or not isinstance(title, str)
+            or (body is not None and not isinstance(body, str))):
+        raise ValueError("GitHub returned invalid issue data.")
+    if canonical.lower().rstrip("/") != url.lower().rstrip("/") or str(issue_number) != number:
+        raise ValueError("GitHub returned a different issue. Use the issue's current URL.")
+    canonical_owner, canonical_repo, _ = _github_issue_parts(canonical)
+    return dict(title=title, body=(body or "")[:20_000], repo=f"{canonical_owner} / {canonical_repo}",
+                number=issue_number, issue_url=canonical.rstrip("/"))

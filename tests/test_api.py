@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fixforge.api import create_app
-from fixforge.config import Settings
+from fixforge.config import GitHubTarget, Settings
 
 
 @pytest.fixture
@@ -92,13 +92,14 @@ def test_unreviewed_and_stale_source_cannot_be_queued(tmp_path, monkeypatch, pre
     github = {"title": issue["title"], "body": issue["body"], "repo": "a / b", "number": 1}
     if changed == "github_issue":
         issue["issue_url"] = "https://github.com/a/b/issues/1"
-        monkeypatch.setattr("fixforge.api.read_github_issue", lambda url, token: {**github, "issue_url": url})
+        monkeypatch.setattr("fixforge.api.read_github_issue", lambda url, token, **options: {**github, "issue_url": url})
     settings = Settings(data_dir=tmp_path / "data", api_key="test-only", repositories={"pilot": source})
     with TestClient(create_app(settings)) as client:
         response = client.post("/api/source-preview", json=issue)
         assert response.status_code == 200
         preview = response.json()
         assert preview["input"]["untrusted_repository"] == [{"path": "app.py", "source": "value = 1\n"}]
+        assert preview["issue_url"] == issue.get("issue_url")
         run = {**issue, "provider": "openai"}
         assert client.post("/api/runs", json=run).status_code == 409
         if changed == "source":
@@ -110,6 +111,21 @@ def test_unreviewed_and_stale_source_cannot_be_queued(tmp_path, monkeypatch, pre
         response = client.post("/api/runs", json={**run, "source_review_sha256": preview["sha256"]})
         assert response.status_code == 409
         assert "changed since review" in response.json()["detail"]
+        assert client.get("/api/runs").json() == []
+
+
+def test_github_issue_must_match_the_configured_checkout(tmp_path, monkeypatch, preview_repository):
+    source, issue = preview_repository
+    issue["issue_url"] = "https://github.com/another/repository/issues/1"
+    settings = Settings(data_dir=tmp_path / "data", api_key="test-only", repositories={"pilot": source},
+                        github_targets={"pilot": GitHubTarget("owner/pilot", "main")})
+    monkeypatch.setattr("fixforge.providers.http.client.HTTPSConnection",
+                        lambda *_args, **_kwargs: pytest.fail("Mismatched issue reached GitHub"))
+    monkeypatch.setattr("fixforge.api.capture_source", lambda *_: pytest.fail("Mismatched issue reached the checkout"))
+    with TestClient(create_app(settings)) as client:
+        responses = [client.post("/api/source-preview", json=issue),
+                     client.post("/api/runs", json={**issue, "provider": "openai", "source_review_sha256": "a" * 64})]
+        assert all(response.status_code == 422 and "owner/pilot" in response.json()["detail"] for response in responses)
         assert client.get("/api/runs").json() == []
 
 
