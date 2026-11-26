@@ -112,7 +112,10 @@ def publish_repair(settings: Settings, run: dict) -> dict:
     linked_issue = re.fullmatch(rf"https://github\.com/{re.escape(target.repo)}/issues/([1-9][0-9]*)/?",
                                 issue_url, re.IGNORECASE)
     marker = f"<!-- fixforge:{receipt['evidence_manifest_sha256']} -->"
-    issue_line = f"\n\nRelated issue #{linked_issue[1]}." if linked_issue else ""
+    # The recorded repository and issue number are bound by the approved evidence manifest.
+    issue_repo = run["repo"].replace(" / ", "/").lower()
+    issue_line = (f"\n\nRelated issue #{linked_issue[1]}." if linked_issue and issue_repo == target.repo.lower()
+                  and linked_issue[1] == str(run.get("number")) else "")
     body = (f"Verified and approved by the local FixForge workbench.\n\n"
             f"- Verified base `{base}`\n"
             f"- Prepared commit `{head}`\n"

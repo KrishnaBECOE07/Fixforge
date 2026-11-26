@@ -29,7 +29,7 @@ export type Run = {
   decision: {action: string; note: string; at: string} | null;
 }
 export type SourcePreview = {
-  provider: InferenceProvider; model: string; sha256: string;
+  provider: InferenceProvider; model: string; sha256: string; issue_url?: string | null;
   input: {issue: {title: string; body: string}; supplied_regression?: string;
     untrusted_repository: {path: string; source: string}[]};
 }

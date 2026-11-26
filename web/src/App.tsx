@@ -321,6 +321,9 @@ function SourceReview({preview}: {preview: SourcePreview}) {
       <summary>Issue text</summary>
       <div className="source-issue">
         <h3>{issue.title}</h3>
+        {preview.issue_url && <a className="source-issue-link" href={preview.issue_url} target="_blank" rel="noreferrer">
+          View issue on GitHub<ArrowUpRight size={13} />
+        </a>}
         <p>{issue.body}</p>
       </div>
     </details>

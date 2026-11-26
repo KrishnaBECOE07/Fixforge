@@ -70,6 +70,8 @@ Indexing uses Python `ast` and lexical term overlap. Ranked context is limited t
 
 `POST /api/source-preview` resolves the issue and returns the selected source, issue text and optional operator-supplied regression locally with `Cache-Control: no-store`. The review digest binds the provider, model, repository ID, snapshot identity, and input sent for inference. Run submission recomputes the digest, and the worker checks it again against its own snapshot before executing tests. The inference receipt records the digest and file paths under the existing provider record hash. With a supplied regression, the provider must return production edits only. The worker uses the reviewed test under its ordinary patch policy and four verification gates.
 
+For GitHub issue URLs, the reader checks the configured GitHub target for the selected checkout before requesting the issue. It verifies the returned issue identity, requires the current URL for a transferred issue, and carries the canonical link in the source review. The draft publisher only references an issue whose repository and number match the verified record and the publication target.
+
 The original snapshot receives only the proposed new regression. The patched snapshot is copied from that state and receives production edits. Existing tests are unchanged in both. A third copy restores the original production edits after the patch passes; the same regression failures must return. Source identity includes the Git HEAD (when available), status digest, Python snapshot hash and per-file hashes. It captures supported Python content, not every binary or ignored non-Python file.
 
 ## Evidence

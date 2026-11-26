@@ -68,7 +68,7 @@ v0.2 supports **small Python repositories using standard-library dependencies an
 3. Register a repository path in `FIXFORGE_REPOSITORIES`. The UI accepts registered IDs only.
 4. Start Docker Desktop with the Linux engine, then pull `python:3.11-slim` (or the image configured in `.env`). Tests never pull images automatically.
 5. Restart the FixForge server. Select **New repair → AI repository repair**.
-6. Supply an issue title and reproduction, or a GitHub issue URL. Match the selected checkout to the issue repository.
+6. Supply an issue title and reproduction, or a GitHub issue URL. When the checkout has a GitHub target in `FIXFORGE_GITHUB_TARGETS`, FixForge checks that the issue belongs to that repository. The source review links to the issue and shows the text selected for inference.
 7. If you already have a failing test, expand **Supply a regression test** and paste a complete Python `unittest` module. The model proposes the production edits. Leave the field blank to ask the model for both the edits and the test.
 8. Select **Review source** to inspect what the model will receive, including any supplied test. Select **Start local repair** for Ollama or **Send to OpenAI and start** for OpenAI. Changes to the issue, test, checkout, or inference provider require a new review.
 

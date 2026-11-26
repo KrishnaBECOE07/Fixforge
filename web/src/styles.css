@@ -61,6 +61,8 @@
 .source-issue { max-height: 12rem; overflow: auto; padding: 12px; overflow-wrap: anywhere; }
 .source-issue h3 { margin: 0 0 6px; font-size: 13px; }
 .source-issue p { margin: 0; white-space: pre-wrap; line-height: 1.55; }
+.source-issue-link { display: inline-flex; align-items: center; gap: 4px; color: var(--green-dark); text-decoration: underline; }
+.source-issue .source-issue-link { margin-bottom: 8px; }
 
 .publication-panel { margin-top: 18px; }
 .publication-content { padding: 0 22px 20px; color: #4e6247; font-size: 12px; line-height: 1.6; }

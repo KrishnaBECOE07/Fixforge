@@ -129,7 +129,11 @@ def pilot(tmp_path, monkeypatch, request):
             if run["status"] not in {"queued", "running"}:
                 break
             time.sleep(.05)
-        assert run["status"] == "review", run
+        if run["status"] != "review":
+            logs = "\n".join(f"{check['label']} ({check['runner']}, exit {check['exit_code']}, "
+                             f"timed out: {check['timed_out']})\n{check['log'][-4000:]}" for check in run["checks"])
+            pytest.fail(f"Repair status: {run['status']}. {run['error'] or 'Verification did not reach review.'}\n{logs}",
+                        pytrace=False)
         assert (root / fixture.path).read_text() == fixture.original
         assert len(requests) == 1
         assert json.loads(requests[0]) == disclosure["input"]

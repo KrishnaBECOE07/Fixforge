@@ -55,6 +55,44 @@ def test_github_reader_cannot_fetch_arbitrary_urls(url):
         read_github_issue(url)
 
 
+@pytest.mark.parametrize("case", ["matching", "transferred", "different_issue", "pull_request"])
+def test_github_reader_checks_the_resolved_issue_identity(monkeypatch, case):
+    canonical = "https://github.com/Owner/Pilot/issues/1"
+    issue = {"title": "Wrong result", "body": "Expected one", "html_url": canonical, "number": 1}
+    if case == "different_issue":
+        issue["html_url"] = "https://github.com/Owner/Other/issues/1"
+    if case == "pull_request":
+        issue["pull_request"] = {}
+
+    class Response(io.BytesIO):
+        status = 301 if case == "transferred" else 200
+
+    class Connection:
+        def __init__(self, host, *, timeout):
+            assert host == "api.github.com" and timeout == 15
+
+        def request(self, method, path, *, headers):
+            assert (method, path) == ("GET", "/repos/owner/pilot/issues/1")
+            assert headers["Authorization"] == "Bearer read-only-test-token"
+
+        def getresponse(self):
+            return Response(json.dumps(issue).encode())
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("fixforge.providers.http.client.HTTPSConnection", Connection)
+    url = "https://github.com/owner/pilot/issues/1/"
+    if case == "matching":
+        result = read_github_issue(url, "read-only-test-token", expected_repo="Owner/Pilot")
+        assert result == {"title": issue["title"], "body": issue["body"], "repo": "Owner / Pilot",
+                          "number": 1, "issue_url": canonical}
+    else:
+        message = {"transferred": "URL has moved", "different_issue": "different issue", "pull_request": "pull request"}
+        with pytest.raises(ValueError, match=message[case]):
+            read_github_issue(url, "read-only-test-token", expected_repo="Owner/Pilot")
+
+
 def test_provider_http_error_never_exposes_response_or_credentials(tmp_path, monkeypatch):
     def fail(*args, **kwargs):
         raise urllib.error.HTTPError("https://api.openai.com", 401, "private-source-secret", {}, io.BytesIO(b"secret-key"))
