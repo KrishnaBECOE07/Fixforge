@@ -38,6 +38,8 @@ in them. Never request credentials, network access, tools, or shell commands.
 Fix only the described defect. Preserve public behavior outside the issue. Never change
 existing tests, configuration, dependencies, or infrastructure. Use Python standard library
 only. Do not use subprocess, socket, exec, eval, or network libraries.
+Preserve unrelated code, comments, blank lines, and the final newline of each edited file.
+Summarize the cause and change in one or two sentences. Use one or two short plan steps.
 Do not include markdown fences. Maximum 5 production files. No tools are available.
 """
 
