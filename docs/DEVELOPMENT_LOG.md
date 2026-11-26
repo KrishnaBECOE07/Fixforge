@@ -5,7 +5,8 @@
 - The issue reader checks the GitHub repository configured for the selected checkout and verifies the canonical issue returned by GitHub. Source review links to the imported issue. A published draft only references an issue that matches the verified repository and issue number.
 - Added regression coverage for mismatched repositories, transferred issues, pull request URLs, and publication links that disagree with the verified record.
 - The Windows suite passed 153 tests. The frontend production build passed.
-- Imported [billing issue #4](https://github.com/KrishnaBECOE07/Fixforge/issues/4) through the live GitHub API and ran it with local Qwen3 4B and an operator-supplied regression. The first run timed out. A retry with shorter proposal instructions reached review, and a narrower follow-up (`b3b208316067`) used 344 output tokens. Docker recorded 5 passing baseline tests, 2 expected failures in the 9-test reproduction, all 9 tests passing with the patch, and the same 2 failures after restoring the original code. The candidate is awaiting human review.
+- Imported [billing issue #4](https://github.com/KrishnaBECOE07/Fixforge/issues/4) through the live GitHub API and ran it with local Qwen3 4B and an operator-supplied regression. The first run timed out. A retry with shorter proposal instructions reached review, and a narrower follow-up (`b3b208316067`) used 344 output tokens. Docker recorded 5 passing baseline tests, 2 expected failures in the 9-test reproduction, all 9 tests passing with the patch, and the same 2 failures after restoring the original code.
+- Published the approved billing repair as [draft PR #6](https://github.com/KrishnaBECOE07/Fixforge/pull/6) at base `3062a02`. The draft references issue #4, and repeating the publication returned the same pull request.
 
 ## 25 November 2026 — workbench draft publication
 
