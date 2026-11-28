@@ -1,18 +1,18 @@
 # FixForge
 
-**Evidence-first software repair. From issue to verified patch, with a human at the review gate.**
+**FixForge turns a Python bug report into a patch you can verify and review.**
 
-FixForge is a local developer workbench that investigates a defect, proposes a bounded code change, proves a regression fails before the change and passes after it, and prepares a review package.
+The workbench runs the original test suite, reproduces the defect with a new regression, checks the patch, then restores the original code and confirms the same failure returns. Reviewers can inspect the diff, named test outcomes, and source revision before approving the exact patch or publishing it as a GitHub draft PR.
 
-The local v0.2 release supports Python repositories with standard-library dependencies and `unittest`. An approved Ollama repair passed all four Docker verification gates and was packaged as a reproducible Git commit. The bundled demos let you try the workbench without configuring a model. See the [development log](docs/DEVELOPMENT_LOG.md) for the live pilot and test results.
+[Quick start](#quick-start) · [Four-case evaluation](examples/evaluation/README.md) · [Example draft PR](https://github.com/KrishnaBECOE07/Fixforge/pull/6) · [Architecture](docs/ARCHITECTURE.md)
 
 ![The FixForge repair workbench](docs/screenshots/workbench.jpg)
 
 The [v0.2 verification preview](docs/screenshots/verification-v02.jpg) shows all four gates and named outcomes; the [evidence preview](docs/screenshots/evidence-v02.jpg) shows the new source and inference receipts.
 
-## Run it
+## Quick start
 
-Requires Python 3.11+ and Node.js 20.19+ / 22.12+. The curated demo needs no API key or Docker.
+Clone the repository and open a terminal in the clone. You need Python 3.11+ and Node.js 20.19+ / 22.12+. The curated demo runs locally without an API key, a model, or Docker.
 
 On Windows, from this folder:
 
@@ -26,15 +26,15 @@ If your PowerShell policy disallows scripts, use the manual commands below. Ther
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.lock
 cd web
-npm ci
-npm run build
+npm.cmd ci
+npm.cmd run build
 cd ..
 .\.venv\Scripts\python.exe -m fixforge
 ```
 
-On macOS/Linux, replace `.venv\Scripts\python.exe` with `.venv/bin/python`.
+On macOS/Linux, use `.venv/bin/python` and replace `npm.cmd` with `npm`.
 
-Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** and select **Try a live demo**. The API reference is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** and select **Try a live demo**. Open **Verification** to inspect the four gates, then **Code changes** to review the patch. The API reference is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
 The app persists run history, test logs, source receipts and patch snapshots in `.fixforge/`. It binds to loopback and supports one local operator. Keep one server process running for each data directory.
 
