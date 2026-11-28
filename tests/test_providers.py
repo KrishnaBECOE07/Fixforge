@@ -170,7 +170,7 @@ def test_malformed_output_envelopes_are_sanitized(tmp_path, monkeypatch, output)
 
 def test_ollama_sends_only_reviewed_input_to_loopback(tmp_path, monkeypatch):
     proposed = {"rationale": "Fix the interval boundary", "plan": ["Check adjacency"],
-                "edits": [{"path": "app.py", "content": "# bounded patch"}], "regression": "test"}
+                "edits": [{"path": "app.py", "old": "untrusted source", "new": "bounded patch"}], "regression": "test"}
     calls = []
 
     class LocalResponse(io.BytesIO):
@@ -200,7 +200,9 @@ def test_ollama_sends_only_reviewed_input_to_loopback(tmp_path, monkeypatch):
     monkeypatch.setattr("fixforge.providers.http.client.HTTPConnection", LocalConnection)
     settings = Settings(data_dir=tmp_path, api_key="private-cloud-key", ollama_timeout_seconds=180)
     result = request_proposal(settings, provider="ollama")
-    assert {key: value for key, value in result.items() if key != "_provider"} == proposed
+    assert {key: value for key, value in result.items() if key != "_provider"} == {
+        **proposed, "edits": [{"path": "app.py", "content": "# bounded patch"}],
+    }
     assert [call[0] for call in calls] == ["/api/show", "/api/chat"]
     assert calls[0][1] == {"model": DEFAULT_OLLAMA_MODEL}
     assert calls[0][2] == 5 and calls[1][2] == 180
@@ -210,10 +212,12 @@ def test_ollama_sends_only_reviewed_input_to_loopback(tmp_path, monkeypatch):
     assert payload["truncate"] is False and payload["shift"] is False and payload["think"] is False
     assert payload["options"]["num_predict"] == 4096
     assert payload["format"]["required"] == ["rationale", "plan", "edits", "regression"]
+    assert payload["format"]["$defs"]["ExactEdit"]["required"] == ["path", "old", "new"]
     assert json.loads(payload["messages"][1]["content"]) == {
         "issue": {"title": "x", "body": "y"}, "untrusted_repository": [{"path": "app.py", "source": "# untrusted source"}],
     }
     assert result["_provider"]["provider"] == "ollama"
+    assert result["_provider"]["edit_format"] == "exact_replacement"
     assert result["_provider"]["limits"]["timeout_seconds"] == 180
     assert result["_provider"]["usage"] == {"input_tokens": 190, "output_tokens": 88, "total_tokens": 278}
 

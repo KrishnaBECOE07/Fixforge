@@ -28,10 +28,16 @@ def validate_proposal(root: Path, originals: dict[str, str], proposal: dict, reg
             raise ValueError("Patch content is missing or exceeds size limit")
         if content == originals[path]:
             raise ValueError("Patch does not change production code")
-        _scan(content)
+        try:
+            _scan(content)
+        except SyntaxError as error:
+            raise ValueError(f"Proposed production edit is invalid Python at line {error.lineno or '?'}") from None
         seen.add(path)
         files.append(_change(path, originals[path], content, "modified"))
-    validate_regression(regression, originals, regression_path)
+    try:
+        validate_regression(regression, originals, regression_path)
+    except SyntaxError as error:
+        raise ValueError(f"Proposed regression is invalid Python at line {error.lineno or '?'}") from None
     files.append(_change(regression_path, "", regression, "added"))
     return files
 

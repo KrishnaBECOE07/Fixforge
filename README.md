@@ -114,6 +114,8 @@ Run `python -m fixforge doctor` to check the model, registered checkout and Dock
 
 Configure `FIXFORGE_MAX_OUTPUT_TOKENS` (256–16,000) and `FIXFORGE_MAX_CONTEXT_CHARS` (1,000–120,000) in `.env`. OpenAI defaults are 10,000 output tokens, 90,000 selected source characters and a 90-second request timeout (`FIXFORGE_PROVIDER_TIMEOUT_SECONDS`, 5–120). Ollama caps the shared budgets at 4,096 output tokens and 16,000 selected source characters and uses an 8,192-token context window. Its default timeout is 300 seconds (`FIXFORGE_OLLAMA_TIMEOUT_SECONDS`, 5–600) to allow local hardware time to generate a repair. Each run makes one model attempt. Reported token usage is retained even for incomplete or schema-invalid provider responses when available.
 
+Ollama proposes a text replacement for each edited file. FixForge requires the original text to match exactly once in the reviewed source before reconstructing the file and applying the same patch policy and verification gates.
+
 The workbench shows named outcomes and a reason for each gate. Source, inference and execution receipts appear in the Evidence record. Earlier records remain readable. Start a new run to capture the execution receipt.
 
 ## Pilot repository

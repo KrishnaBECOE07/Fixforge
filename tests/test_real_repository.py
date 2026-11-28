@@ -81,7 +81,8 @@ def pilot(tmp_path, monkeypatch, request):
         assert path == "/api/chat"
         assert ("regression" in payload["format"]["required"]) is not supplied
         requests.append(payload["messages"][1]["content"])
-        return {"done": True, "done_reason": "stop", "message": {"role": "assistant", "content": json.dumps(proposal)}}
+        exact_proposal = {**proposal, "edits": [dict(path=fixture.path, old=fixture.original, new=fixture.replacement)]}
+        return {"done": True, "done_reason": "stop", "message": {"role": "assistant", "content": json.dumps(exact_proposal)}}
 
     if provider == "ollama":
         monkeypatch.setattr("fixforge.providers.ollama_request", respond_locally)
