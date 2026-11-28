@@ -122,4 +122,6 @@ Keep this as a local application while building and validating the execution bou
 
 The Responses request uses a strict JSON schema for shape and rejects extra keys. Pydantic independently enforces local types, lengths and edit counts before policy checks or execution. Output and response bytes, selected context characters, request timeout and attempt count are bounded. Reported token usage is captured for successful, incomplete and schema-rejected responses when supplied by the provider; missing usage stays unknown. No dollar cap or live-model quality claim is implied.
 
+Ollama sends an original snippet and replacement per edited file. The adapter reconstructs the candidate only when the path was reviewed and the original snippet matches at a single location. It then hands the resulting file to the same policy and verification workflow. The provider receipt records `exact_replacement` as the edit format.
+
 Freshness checks observe local and remote state at specific points. GitHub's draft API accepts a base branch name, so a base update can race the POST. FixForge reports the draft URL and blocks a success result when GitHub returns a different base SHA.

@@ -9,7 +9,7 @@ import urllib.request
 from .config import Settings
 from .disclosure import require_review
 from .fixtures import FIXTURES
-from .proposals import output_schema, parse_proposal
+from .proposals import EditMatchError, output_schema, parse_exact_proposal, parse_proposal
 
 MAX_RESPONSE_BYTES = 512_000
 
@@ -51,15 +51,25 @@ GENERATE_REGRESSION = """New regression tests must use unittest.TestCase, meanin
 The regression must include explicit imports for the code it calls. Follow the import style in the existing tests.
 Tests must fail on the original code and pass with the fix. Do not use skip or expectedFailure.
 Output exactly: {"rationale": "root cause and fix", "plan": ["step"],
-"edits": [{"path": "existing.py", "content": "complete replacement source"}],
+"edits": [<edit>],
 "regression": "complete new unittest test module"}.
 """
 
 USE_SUPPLIED_REGRESSION = """The supplied_regression input is a test the operator supplied.
 Fix the production code to satisfy the issue and the test. Do not write or propose changes to tests.
 Output exactly: {"rationale": "root cause and fix", "plan": ["step"],
-"edits": [{"path": "existing.py", "content": "complete replacement source"}]}.
+"edits": [<edit>]}.
 """
+
+
+def proposal_instructions(supplied_regression: str | None, *, exact_edits: bool = False) -> str:
+    instructions = GENERATE_REGRESSION if supplied_regression is None else USE_SUPPLIED_REGRESSION
+    if not exact_edits:
+        return SYSTEM + instructions.replace("<edit>", '{"path": "existing.py", "content": "complete replacement source"}')
+    replacement = '{"path": "existing.py", "old": "exact original code", "new": "corrected code"}'
+    return (SYSTEM + instructions.replace("<edit>", replacement)
+            + "Copy old verbatim from the reviewed file, including indentation. Choose a single unique snippet. "
+              "Only that text is replaced with new. The rest of the file stays intact.\n")
 
 
 def propose(settings: Settings, run: dict, disclosure: dict | None) -> dict:
@@ -90,9 +100,16 @@ def read_provider_response(response) -> dict:
     return result
 
 
-def parse_response_proposal(output: str, record: dict, supplied_regression: str | None) -> dict:
+def parse_response_proposal(output: str, record: dict, supplied_regression: str | None,
+                            *, reviewed_files: dict[str, str] | None = None) -> dict:
     try:
-        proposal = parse_proposal(json.loads(output), supplied_regression=supplied_regression)
+        value = json.loads(output)
+        if reviewed_files is None:
+            proposal = parse_proposal(value, supplied_regression=supplied_regression)
+        else:
+            proposal = parse_exact_proposal(value, reviewed_files, supplied_regression=supplied_regression)
+    except EditMatchError as error:
+        raise ProviderResponseError(str(error), record) from None
     except (ValueError, TypeError):
         raise ProviderResponseError("AI response does not satisfy the repair proposal contract", record) from None
     return {**proposal, "_provider": record}
@@ -102,7 +119,7 @@ def propose_openai(settings: Settings, disclosure: dict) -> dict:
     if not settings.api_key:
         raise ValueError("Set OPENAI_API_KEY in .env to enable OpenAI repairs")
     regression = disclosure["input"].get("supplied_regression")
-    instructions = SYSTEM + (GENERATE_REGRESSION if regression is None else USE_SUPPLIED_REGRESSION)
+    instructions = proposal_instructions(regression)
     payload = dict(model=disclosure["model"], store=False, instructions=instructions,
                    input=json.dumps(disclosure["input"]),
                    text={"format": {"type": "json_schema", "name": "fixforge_repair",
@@ -174,8 +191,9 @@ def propose_ollama(settings: Settings, disclosure: dict) -> dict:
     check_ollama_model(model)
     limits = settings.inference_limits("ollama")
     regression = disclosure["input"].get("supplied_regression")
-    instructions = SYSTEM + (GENERATE_REGRESSION if regression is None else USE_SUPPLIED_REGRESSION)
-    payload = dict(model=model, stream=False, format=output_schema(production_only=regression is not None),
+    instructions = proposal_instructions(regression, exact_edits=True)
+    payload = dict(model=model, stream=False,
+                   format=output_schema(production_only=regression is not None, exact_edits=True),
                    think=False, truncate=False, shift=False,
                    messages=[{"role": "system", "content": instructions},
                              {"role": "user", "content": json.dumps(disclosure["input"])}],
@@ -187,13 +205,15 @@ def propose_ollama(settings: Settings, disclosure: dict) -> dict:
     if type(input_tokens) is int and type(output_tokens) is int:
         usage = dict(input_tokens=input_tokens, output_tokens=output_tokens, total_tokens=input_tokens + output_tokens)
     record = provider_record(settings, usage, disclosure)
+    record["edit_format"] = "exact_replacement"
     if result.get("done") is not True or result.get("done_reason") != "stop":
         raise ProviderResponseError("Ollama response was incomplete; no patch was executed", record)
     message = result.get("message")
     if (not isinstance(message, dict) or message.get("role") != "assistant"
             or not isinstance(message.get("content"), str) or message.get("tool_calls")):
         raise ProviderResponseError("Ollama returned an invalid assistant message", record)
-    return parse_response_proposal(message["content"], record, regression)
+    reviewed_files = {entry["path"]: entry["source"] for entry in disclosure["input"]["untrusted_repository"]}
+    return parse_response_proposal(message["content"], record, regression, reviewed_files=reviewed_files)
 
 
 def _github_issue_parts(url: str) -> tuple[str, str, str]:

@@ -1,7 +1,27 @@
 import pytest
 
 from fixforge.config import Settings
-from fixforge.proposals import output_schema, parse_proposal
+from fixforge.proposals import EditMatchError, output_schema, parse_exact_proposal, parse_proposal
+
+
+@pytest.mark.parametrize("path,source,old,match", [
+    ("unreviewed.py", "old", "old", "reviewed file"),
+    ("app.py", "bbb", "old", "exactly one location"),
+    ("app.py", "aaa", "aa", "exactly one location"),
+])
+def test_exact_proposal_rejects_unreviewed_or_ambiguous_edits(path, source, old, match):
+    proposal = dict(rationale="Change the code safely", plan=["Repair"], edits=[dict(path=path, old=old, new="new")])
+    with pytest.raises(EditMatchError, match=match):
+        parse_exact_proposal(proposal, {"app.py": source}, supplied_regression="reviewed test")
+
+
+def test_exact_proposal_preserves_context_and_supplied_regression():
+    original = "first = 1\nvalue = 2\nlast = 3\n"
+    proposal = dict(rationale="Change one value in place", plan=["Repair"],
+                    edits=[dict(path="app.py", old="value = 2", new="value = 4")])
+    converted = parse_exact_proposal(proposal, {"app.py": original}, supplied_regression="reviewed test")
+    assert converted["edits"] == [dict(path="app.py", content="first = 1\nvalue = 4\nlast = 3\n")]
+    assert converted["regression"] == "reviewed test"
 
 
 def test_structured_output_schema_forbids_extra_keys():

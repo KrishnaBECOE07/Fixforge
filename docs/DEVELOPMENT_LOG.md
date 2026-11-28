@@ -1,5 +1,12 @@
 # Development log
 
+## 28 November 2026 — portfolio quick start and independent repair evaluation
+
+- The Windows quick start now rebuilds the frontend from the current checkout and installs Python or Node dependencies when their lockfile changes. Launched a fresh GitHub clone in Windows PowerShell, built the UI, and completed the browser demo through all four test gates and patch approval. The demo used the local trusted fixture runner.
+- Added four functional defects across the inventory and dispatch evaluation fixtures. The runner uses the source-review API and Docker to check the model’s candidate against independent tests that stay outside the reviewed source.
+- Restricted Ollama production edits to a uniquely matching snippet in a reviewed file. Kept the engine’s patch policy and four verification gates in the materialized candidate path. Invalid Python now identifies whether it came from the production edit or regression.
+- With local Qwen3 4B, model-written regressions resolved zero of four cases in both trials. With an operator-supplied regression, two of four cases resolved and passed independent checks. The [evaluation report](../examples/evaluation/README.md) records the model failures, test counts, and reproduction commands.
+
 ## 28 November 2026 — model outcome reporting and guest-list pilot
 
 - Benchmark Lab shows local model runs by provider, recorded model and regression author. Each group reports how many completed runs reached review, how many are active, where runs stopped, and p50/p95 for completed runs with a recorded duration. Historical records remain readable. These are local workflow results. The held-out evaluation remains pending.

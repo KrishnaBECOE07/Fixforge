@@ -1,18 +1,18 @@
 # FixForge
 
-**Evidence-first software repair. From issue to verified patch, with a human at the review gate.**
+**FixForge turns a Python bug report into a patch you can verify and review.**
 
-FixForge is a local developer workbench that investigates a defect, proposes a bounded code change, proves a regression fails before the change and passes after it, and prepares a review package.
+The workbench runs the original test suite, reproduces the defect with a new regression, checks the patch, then restores the original code and confirms the same failure returns. Reviewers can inspect the diff, named test outcomes, and source revision before approving the exact patch. An approved repository repair can then be published as a GitHub draft PR.
 
-The local v0.2 release supports Python repositories with standard-library dependencies and `unittest`. An approved Ollama repair passed all four Docker verification gates and was packaged as a reproducible Git commit. The bundled demos let you try the workbench without configuring a model. See the [development log](docs/DEVELOPMENT_LOG.md) for the live pilot and test results.
+[Quick start](#quick-start) · [Four-case evaluation](examples/evaluation/README.md) · [Example draft PR](https://github.com/KrishnaBECOE07/Fixforge/pull/6) · [Architecture](docs/ARCHITECTURE.md)
 
 ![The FixForge repair workbench](docs/screenshots/workbench.jpg)
 
 The [v0.2 verification preview](docs/screenshots/verification-v02.jpg) shows all four gates and named outcomes; the [evidence preview](docs/screenshots/evidence-v02.jpg) shows the new source and inference receipts.
 
-## Run it
+## Quick start
 
-Requires Python 3.11+ and Node.js 20.19+ / 22.12+. The curated demo needs no API key or Docker.
+Clone the repository and open a terminal in the clone. You need Python 3.11+ and Node.js 20.19+ / 22.12+. The curated demo runs locally without an API key, a model, or Docker.
 
 On Windows, from this folder:
 
@@ -26,15 +26,15 @@ If your PowerShell policy disallows scripts, use the manual commands below. Ther
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.lock
 cd web
-npm ci
-npm run build
+npm.cmd ci
+npm.cmd run build
 cd ..
 .\.venv\Scripts\python.exe -m fixforge
 ```
 
-On macOS/Linux, replace `.venv\Scripts\python.exe` with `.venv/bin/python`.
+On macOS/Linux, use `.venv/bin/python` and replace `npm.cmd` with `npm`.
 
-Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** and select **Try a live demo**. The API reference is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** and select **Try a live demo**. Open **Test evidence** to inspect the four gates, then **Code changes** to review the patch. The API reference is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
 The app persists run history, test logs, source receipts and patch snapshots in `.fixforge/`. It binds to loopback and supports one local operator. Keep one server process running for each data directory.
 
@@ -113,6 +113,8 @@ Run `python -m fixforge doctor` to check the model, registered checkout and Dock
 ## Bound inference requests
 
 Configure `FIXFORGE_MAX_OUTPUT_TOKENS` (256–16,000) and `FIXFORGE_MAX_CONTEXT_CHARS` (1,000–120,000) in `.env`. OpenAI defaults are 10,000 output tokens, 90,000 selected source characters and a 90-second request timeout (`FIXFORGE_PROVIDER_TIMEOUT_SECONDS`, 5–120). Ollama caps the shared budgets at 4,096 output tokens and 16,000 selected source characters and uses an 8,192-token context window. Its default timeout is 300 seconds (`FIXFORGE_OLLAMA_TIMEOUT_SECONDS`, 5–600) to allow local hardware time to generate a repair. Each run makes one model attempt. Reported token usage is retained even for incomplete or schema-invalid provider responses when available.
+
+Ollama proposes a text replacement for each edited file. FixForge requires the original text to match exactly once in the reviewed source before reconstructing the file and applying the same patch policy and verification gates.
 
 The workbench shows named outcomes and a reason for each gate. Source, inference and execution receipts appear in the Evidence record. Earlier records remain readable. Start a new run to capture the execution receipt.
 
