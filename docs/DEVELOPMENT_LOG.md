@@ -1,5 +1,11 @@
 # Development log
 
+## 28 November 2026 — model outcome reporting and guest-list pilot
+
+- Benchmark Lab shows local model runs by provider, recorded model and regression author. Each group reports how many completed runs reached review, how many are active, where runs stopped, and p50/p95 for completed runs with a recorded duration. Historical records remain readable. These are local workflow results. The held-out evaluation remains pending.
+- The Windows Docker integration and frontend build passed. The new Benchmark Lab rendered live workspace data in the browser, including legacy timeouts and runs with no model receipt.
+- The guest-list issue reached review using local Qwen3 4B and a model-generated regression (`9d2f808c98bb`, 521 output tokens). Docker recorded five passing baseline tests, one expected failure in the eight-test reproduction, all eight tests passing with the patch, and the same failure after restoring the original code. The pilot checkout stayed clean at `3062a02`. The patch removes the production file's final newline and awaits human review.
+
 ## 26 November 2026 — GitHub issue intake
 
 - The issue reader checks the GitHub repository configured for the selected checkout and verifies the canonical issue returned by GitHub. Source review links to the imported issue. A published draft only references an issue that matches the verified repository and issue number.

@@ -57,7 +57,7 @@ The app persists run history, test logs, source receipts and patch snapshots in 
 - Downloads: unified `.patch`, full evidence `.json`, and a Markdown review description.
 - Local Git handoff for an approved repair at a clean commit, with the patch and evidence in one ZIP.
 - Explicit publication of an approved repair to GitHub as a draft pull request from the workbench or CLI.
-- Local benchmark metrics with demo and AI run counts explicitly separated.
+- The Benchmark Lab shows local AI outcomes grouped by model and regression author, including how many reached review, why runs stopped, and p50 and p95 run times. Curated demo counts are separate.
 
 ## Try a real repository
 

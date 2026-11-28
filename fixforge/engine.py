@@ -10,7 +10,7 @@ from .disclosure import prepare_disclosure, require_review
 from .fixtures import FIXTURES
 from .intelligence import index_repository, safe_path
 from .policy import REGRESSION_PATH, validate_proposal
-from .providers import propose
+from .providers import ProviderTimeoutError, propose
 from .proposals import parse_proposal
 from .provenance import assert_source_current, capture_source, source_revision
 from .sandbox import harness_fingerprint, resolve_docker_image, run_tests
@@ -32,6 +32,7 @@ class Engine:
             # Exception bodies from network clients may expose tokens. Provider adapters sanitize them.
             message = str(exc)[:1000] if isinstance(exc, (ValueError, SyntaxError)) else f"{type(exc).__name__}: execution failed; inspect local configuration"
             self.store.event(run_id, "failed", "Verification stopped", message, status="failed", error=message,
+                             provider_timed_out=isinstance(exc, ProviderTimeoutError),
                              duration_ms=round((time.monotonic() - started) * 1000))
 
     def _execute(self, run_id: str, started: float) -> None:

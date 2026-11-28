@@ -20,6 +20,7 @@ from .disclosure import prepare_disclosure, require_review
 from .engine import Engine, review_markdown
 from .fixtures import FIXTURES
 from .intelligence import index_repository
+from .metrics import model_outcomes
 from .providers import check_ollama_model, read_github_issue
 from .provenance import assert_source_current, capture_source
 from .publisher import preview_publication, publish_repair
@@ -196,6 +197,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             except ValueError as exc:
                 raise HTTPException(409, str(exc)) from None
             values["source_review_sha256"] = data.source_review_sha256
+            values["reviewed_model"] = disclosure["model"]
         with submission_lock:
             if sum(run["status"] in {"queued", "running"} for run in store.list()) >= 4:
                 raise HTTPException(429, "The local queue is full. Wait for a run to finish.")
@@ -264,7 +266,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     success_rate=round(100 * len(verified) / len(done), 1) if done else None,
                     mean_duration_ms=round(sum(r.get("duration_ms", 0) for r in done) / len(done)) if done else None,
                     demo_runs=sum(r["provider"] == "demo" for r in runs),
-                    ai_runs=sum(r["provider"] != "demo" for r in runs))
+                    ai_runs=sum(r["provider"] != "demo" for r in runs),
+                    model_outcomes=model_outcomes(runs))
 
     dist = ROOT / "web" / "dist"
     if dist.is_dir():

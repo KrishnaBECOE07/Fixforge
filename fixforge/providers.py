@@ -20,6 +20,10 @@ class ProviderResponseError(ValueError):
         self.provider_record = record
 
 
+class ProviderTimeoutError(ValueError):
+    pass
+
+
 def provider_record(settings: Settings, raw: object, disclosure: dict) -> dict:
     usage = None
     if isinstance(raw, dict):
@@ -113,7 +117,11 @@ def propose_openai(settings: Settings, disclosure: dict) -> dict:
     except urllib.error.HTTPError as exc:
         # Response bodies may contain sensitive issue content; do not persist them.
         raise ValueError(f"AI provider returned HTTP {exc.code}. Check the model, key and account quota.") from None
-    except (urllib.error.URLError, TimeoutError):
+    except TimeoutError:
+        raise ProviderTimeoutError("Could not reach the AI provider before the request deadline") from None
+    except urllib.error.URLError as exc:
+        if isinstance(exc.reason, TimeoutError):
+            raise ProviderTimeoutError("Could not reach the AI provider before the request deadline") from None
         raise ValueError("Could not reach the AI provider before the request deadline") from None
     record = provider_record(settings, result.get("usage"), disclosure)
     if result.get("status") != "completed":
@@ -146,7 +154,7 @@ def ollama_request(path: str, payload: dict, timeout: int) -> dict:
                 raise ValueError(f"Local Ollama returned HTTP {response.status}. Check the model and context size.")
             return read_provider_response(response)
     except TimeoutError:
-        raise ValueError("Local Ollama did not respond before the request deadline.") from None
+        raise ProviderTimeoutError("Local Ollama did not respond before the request deadline.") from None
     except (OSError, http.client.HTTPException):
         raise ValueError("Could not reach local Ollama. Check that it is running on port 11434.") from None
     finally:
