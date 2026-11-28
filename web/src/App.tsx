@@ -6,7 +6,7 @@ import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Box, Br
   GitPullRequest, Layers3, LoaderCircle, LockKeyhole, PanelLeftClose, Play, Plus,
   Search, Settings2, ShieldCheck, Sparkles, Terminal, Workflow, X, XCircle, Zap } from 'lucide-react'
 import { api } from './api'
-import type { Change, Check as TestCheck, Config, Fixture, InferenceProvider, Metrics, Publication,
+import type { Change, Check as TestCheck, Config, Fixture, InferenceProvider, Metrics, ModelOutcome, Publication,
   PublicationPreview, Run, SourcePreview } from './types'
 
 type Page = 'runs' | 'benchmarks' | 'repositories' | 'settings' | 'guide'
@@ -149,7 +149,31 @@ export default function App() {
           if (selected.provider !== 'demo') setModal(selected)
           else void start({provider: 'demo', fixture_id: selected.fixture_id}).catch(() => {})
         }} />}
-        {page === 'benchmarks' && <><PageHeading eyebrow="MEASURE WHAT MATTERS" title="Every fix has to earn its green." description="A repeatable lab for regression detection and verified repair. Demo results are tracked separately from AI results." /><div className="stats-grid"><Stat label="Curated cases" value={String(fixtures.length)} detail="Boundary and normalization defects" icon={<FlaskConical size={17} />} /><Stat label="Demo runs" value={String(metrics?.demo_runs ?? 0)} detail="Deterministic, no model involved" icon={<Play size={17} />} /><Stat label="AI runs" value={String(metrics?.ai_runs ?? 0)} detail="Your registered Python repositories" icon={<Sparkles size={17} />} /><Stat label="Mean run time" value={duration(metrics?.mean_duration_ms)} detail="All completed runs, including failures" icon={<Clock3 size={17} />} /></div><div className="section-heading"><div><h2>Regression challenge set</h2><p>Run each case against real Python code and inspect the evidence.</p></div></div><div className="case-grid">{fixtures.map((fixture, i) => <article className="case-card" key={fixture.id}><div className="case-top"><span className="case-number">0{i + 1}</span><span className="tiny-tag">CURATED DEMO</span></div><h3>{fixture.title}</h3><p>{fixture.body}</p><div className="tag-row">{fixture.tags.map(t => <span key={t}>{t}</span>)}</div><button className="button secondary" disabled={busy} onClick={() => {void start({provider: 'demo', fixture_id: fixture.id}).catch(() => {})}}><Play size={13} />Run challenge<ArrowUpRight size={14} /></button></article>)}</div><div className="info-callout"><FlaskConical size={19} /><div><b>A development benchmark, with honest boundaries.</b><p>These three recipes validate the repair workflow. They do not measure general AI coding ability. A held-out evaluation suite and repeated AI trials are planned before performance claims.</p></div></div></>}
+        {page === 'benchmarks' && <>
+          <PageHeading eyebrow="BENCHMARK LAB" title="Repair outcomes" description="Inspect local model runs and try the curated regression cases." />
+          <div className="stats-grid">
+            <Stat label="Curated cases" value={String(fixtures.length)} detail="Packaged regression challenges" icon={<FlaskConical size={17} />} />
+            <Stat label="Demo runs" value={String(metrics?.demo_runs ?? 0)} detail="Use deterministic patches" icon={<Play size={17} />} />
+            <Stat label="AI runs" value={String(metrics?.ai_runs ?? 0)} detail="Use your selected model" icon={<Sparkles size={17} />} />
+            <Stat label="Mean run time" value={duration(metrics?.mean_duration_ms)} detail="All completed workspace runs" icon={<Clock3 size={17} />} />
+          </div>
+          <ModelOutcomes outcomes={metrics?.model_outcomes} />
+          <section aria-labelledby="regression-challenge-title">
+            <div className="section-heading"><div>
+              <h2 id="regression-challenge-title">Regression challenge set</h2>
+              <p>Curated demos use real tests and deterministic patches.</p>
+            </div></div>
+            <div className="case-grid">{fixtures.map(fixture => <article className="case-card" key={fixture.id}>
+              <h3>{fixture.title}</h3>
+              <p>{fixture.body}</p>
+              <div className="tag-row">{fixture.tags.map(tag => <span key={tag}>{tag}</span>)}</div>
+              <button className="button secondary" disabled={busy || !connection}
+                onClick={() => {void start({provider: 'demo', fixture_id: fixture.id}).catch(() => {})}}>
+                <Play size={13} />Run challenge<ArrowUpRight size={14} />
+              </button>
+            </article>)}</div>
+          </section>
+        </>}
         {page === 'repositories' && <><PageHeading eyebrow="REPOSITORY INTELLIGENCE" title="Understand the code before changing it." description="Server-registered repositories keep access explicit. FixForge works from bounded copies and never edits your original checkout." /><div className="panel"><div className="panel-heading"><h2>Registered repositories</h2><span className="count-chip">{config?.repositories.length ?? 0}</span></div>{config?.repositories.length ? config.repositories.map(repo => <div className="repo-row" key={repo}><Layers3 size={22} /><div><b>{repo}</b><small>Python AST indexing · unittest · Docker execution</small></div><button className="button secondary" onClick={() => setModal(true)}>New repair<Plus size={14} /></button></div>) : <Empty icon={<Layers3 size={25} />} title="Connect your first Python repository">Register a local path in your server configuration, then restart the engine.</Empty>}</div><div className="setup-panel"><div className="step-badge">01</div><div><h3>Add a repository to .env</h3><p>The browser selects a registered ID. It cannot request arbitrary filesystem paths.</p><pre>{'FIXFORGE_REPOSITORIES={"my-api":"C:/dev/my-api"}'}</pre></div></div><div className="setup-panel"><div className="step-badge">02</div><div><h3>Prepare the execution boundary</h3><p>Start the Linux Docker engine and pull the configured sandbox image. v0.2 supports standard-library Python projects with tests in <code>tests/test_*.py</code>.</p><pre>docker pull python:3.11-slim</pre></div></div><div className="setup-panel"><div className="step-badge">03</div><div><h3>Configure your AI provider</h3><p>{config?.ai_provider === 'ollama'
           ? <>Start Ollama at <code>127.0.0.1:11434</code> and pull the configured model. Use <code>python -m fixforge doctor</code> to check readiness.</>
           : <>Set <code>OPENAI_API_KEY</code> and <code>FIXFORGE_MODEL</code> in .env, then restart FixForge.</>}</p></div></div></>}
@@ -166,6 +190,49 @@ export default function App() {
 function Stat({label, value, detail, icon}: {label: string; value: string; detail: string; icon: ReactNode}) {
   return <article className="stat-card"><div><span>{label}</span>{icon}</div><strong>{value}</strong><p>{detail}</p></article>
 }
+
+const failureLabels: Record<string, string> = {
+  setup: 'Source or Docker setup', baseline: 'Baseline', proposal: 'Proposal', reproduction: 'Reproduction',
+  verification: 'Verification', evidence: 'Evidence', interrupted: 'Interrupted', unknown: 'Unclassified',
+  provider_timeout: 'Provider timeout', test_timeout: 'Test timeout',
+}
+
+function ModelOutcomes({outcomes}: {outcomes: ModelOutcome[] | undefined}) {
+  return <section className="model-outcomes" aria-labelledby="model-outcomes-title">
+    <div className="section-heading">
+      <div>
+        <h2 id="model-outcomes-title">Model run outcomes</h2>
+        <p>Local AI runs grouped by model and who wrote the regression. Reaching review means the verification gates passed.</p>
+      </div>
+    </div>
+    <div className="table-panel">
+      {outcomes === undefined ? <Empty icon={<Sparkles size={19} />} title="Model outcomes unavailable">The local engine has not returned model metrics.</Empty>
+        : outcomes.length === 0 ? <Empty icon={<Sparkles size={19} />} title="No model runs yet">Start an AI repository repair to collect outcomes.</Empty>
+        : <div className="table-scroll" tabIndex={0} role="region" aria-label="Model outcomes table">
+          <table className="model-outcomes-table" aria-labelledby="model-outcomes-title">
+            <thead><tr>
+              <th scope="col">Provider and model</th><th scope="col">Regression author</th>
+              <th scope="col">Reached review</th><th scope="col">In progress</th>
+              <th scope="col">Stopped</th><th scope="col">Run time</th>
+            </tr></thead>
+            <tbody>{outcomes.map(row => <tr key={JSON.stringify([row.provider, row.model, row.regression_origin])}>
+              <th scope="row">{providerNames[row.provider] || row.provider}<small>{row.model ?? 'Model unrecorded'}</small></th>
+              <td>{row.regression_origin === 'operator' ? 'Operator' : 'Model'}</td>
+              <td>{row.completed ? `${row.reached_review} of ${row.completed}` : '—'}</td>
+              <td>{row.in_progress}</td>
+              <td>{Object.keys(row.failures).length ? <ul>{Object.entries(row.failures).map(([category, count]) =>
+                <li key={category}>{count} {failureLabels[category] ?? 'Unclassified'}</li>)}</ul> : '—'}</td>
+              <td>{row.timed_runs ? <>
+                <span>p50 {duration(row.p50_duration_ms)}</span>
+                <small>p95 {duration(row.p95_duration_ms)} · {row.timed_runs} timed</small>
+              </> : '—'}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>}
+    </div>
+  </section>
+}
+
 function PageHeading({eyebrow, title, description}: {eyebrow: string; title: string; description: string}) {
   return <div className="page-heading"><div className="eyebrow"><span />{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>
 }

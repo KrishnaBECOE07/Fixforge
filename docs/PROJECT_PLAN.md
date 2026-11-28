@@ -90,6 +90,14 @@ The first approved local Ollama patch passed all four Docker gates using an oper
 
 The workbench can review and confirm publication to a configured GitHub destination. The approved scheduling repair became [draft PR #2](https://github.com/KrishnaBECOE07/Fixforge/pull/2) at the verified base commit. Repeating publication returned the same draft. The scheduling pilot used a fine-grained token and an operator-supplied issue and regression.
 
+### 28 November progress
+
+The GitHub issue-intake and workbench publication changes are on `main`. Two approved scheduling fixes have live draft PRs. The token-based GitHub flow is verified. GitHub App installation and signed webhook intake remain open.
+
+The Benchmark Lab now groups local AI runs by provider, model and regression author. It shows the count that reached review out of completed runs, failure categories and p50/p95 for runs with recorded durations. Older runs can appear with an unrecorded model. The held-out benchmark is tracked separately and remains a release gate.
+
+Remaining effort is estimated at **35–55 focused hours to private beta** and **50–75 hours total to v1**, assuming one developer working within the existing Python-first scope. The largest items are held-out evaluation and repair quality, reliable restart and cancellation, GitHub App intake, then tester onboarding and the release report. The **13 December** beta and **20 December** v1 targets depend on passing the acceptance gates and getting tester feedback in time.
+
 ## 6. Prioritized backlog
 
 ### P0 — before trusting a real pilot

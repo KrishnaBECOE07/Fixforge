@@ -122,6 +122,7 @@ def pilot(tmp_path, monkeypatch, request):
         response = client.post("/api/runs", json={**issue, "provider": provider,
                                                  "source_review_sha256": disclosure["sha256"]})
         assert response.status_code == 202
+        assert response.json()["reviewed_model"] == disclosure["model"]
         run_id = response.json()["id"]
         deadline = time.monotonic() + (150 if use_docker else 20)
         while time.monotonic() < deadline:

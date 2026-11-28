@@ -6,7 +6,7 @@ import pytest
 
 from fixforge.config import DEFAULT_OLLAMA_MODEL, Settings
 from fixforge.disclosure import prepare_disclosure
-from fixforge.providers import propose, read_github_issue
+from fixforge.providers import ProviderTimeoutError, ollama_request, propose, read_github_issue
 
 
 def request_proposal(settings, issue=None, *, provider="openai"):
@@ -47,6 +47,30 @@ def test_incomplete_ai_response_never_becomes_a_proposal(tmp_path, monkeypatch):
     monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: io.BytesIO(b'{"status":"incomplete"}'))
     with pytest.raises(ValueError, match="incomplete"):
         request_proposal(Settings(data_dir=tmp_path, api_key="test"))
+
+
+@pytest.mark.parametrize("error,expected", [
+    (TimeoutError(), ProviderTimeoutError),
+    (urllib.error.URLError(TimeoutError()), ProviderTimeoutError),
+    (urllib.error.URLError("DNS unavailable"), ValueError),
+])
+def test_openai_deadlines_are_distinct_from_connection_failures(tmp_path, monkeypatch, error, expected):
+    def fail(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr("urllib.request.urlopen", fail)
+    with pytest.raises(expected, match="request deadline") as failure:
+        request_proposal(Settings(data_dir=tmp_path, api_key="test"))
+    assert type(failure.value) is expected
+
+
+def test_ollama_reports_provider_deadlines(monkeypatch):
+    def fail(*_args, **_kwargs):
+        raise TimeoutError
+
+    monkeypatch.setattr("fixforge.providers.http.client.HTTPConnection.request", fail)
+    with pytest.raises(ProviderTimeoutError, match="request deadline"):
+        ollama_request("/api/chat", {}, timeout=5)
 
 
 @pytest.mark.parametrize("url", ["http://github.com/a/b/issues/1", "https://evil.example/a/b/issues/1", "https://github.com/a/../issues/1", "https://github.com/a/b/pull/1", "https://github.com/a/b/issues/1?token=secret"])

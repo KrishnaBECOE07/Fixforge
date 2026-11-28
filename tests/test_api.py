@@ -34,7 +34,43 @@ def test_api_full_review_and_export(client):
     assert "+++ b/payments.py" in patch and "test_fixforge_regression.py" in patch
     response = client.post(f"/api/runs/{run_id}/review", json={"decision": "approve", "patch_sha256": run["evidence"]["patch_sha256"]})
     assert response.status_code == 200 and response.json()["status"] == "approved"
-    assert client.get("/api/metrics").json()["approved"] == 1
+    metrics = client.get("/api/metrics").json()
+    assert metrics["approved"] == 1
+    assert metrics["model_outcomes"] == []
+
+
+def test_model_outcomes_include_timeouts_and_keep_regression_authors_separate(client):
+    store = client.app.state.store
+
+    def create(provider="ollama", **fields):
+        return store.create(provider=provider, title="Example", repo="pilot", **fields)["id"]
+
+    model = {"reviewed_model": "qwen3:4b"}
+    store.update(create(**model), status="rejected", provider_record={"model": "qwen3:4b"}, duration_ms=1000)
+    store.update(create(**model), status="failed", provider_timed_out=True, duration_ms=8000)
+    store.update(create(**model), status="failed", stage="interrupted")
+    store.update(create(**model), status="failed", checks=[{"timed_out": True}], duration_ms=3000)
+    store.update(create(**model, supplied_regression="operator test"), status="review", duration_ms=2000)
+    create(**model, supplied_regression="operator test")
+    store.update(create(), status="failed", error="Local Ollama did not respond before the request deadline.")
+    legacy = create(provider="openai")
+    store.event(legacy, "reproduce", "Regression", "Running the test")
+    store.event(legacy, "failed", "Stopped", "Regression blocked", status="failed")
+
+    response = client.get("/api/metrics")
+    assert response.status_code == 200
+    assert response.json()["ai_runs"] == 8
+    unknown_model, generated, supplied, legacy_openai = response.json()["model_outcomes"]
+    assert unknown_model["model"] is None and unknown_model["failures"] == {"provider_timeout": 1}
+    assert legacy_openai["model"] is None and legacy_openai["failures"] == {"reproduction": 1}
+    assert generated == {
+        "provider": "ollama", "model": "qwen3:4b", "regression_origin": "model",
+        "completed": 4, "in_progress": 0, "reached_review": 1,
+        "failures": {"interrupted": 1, "provider_timeout": 1, "test_timeout": 1},
+        "timed_runs": 3, "p50_duration_ms": 3000, "p95_duration_ms": 8000,
+    }
+    assert supplied["regression_origin"] == "operator"
+    assert (supplied["reached_review"], supplied["completed"], supplied["in_progress"]) == (1, 1, 1)
 
 
 def test_api_rejects_unconfigured_ai_and_unknown_fixture(client):
