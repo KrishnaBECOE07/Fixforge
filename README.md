@@ -2,7 +2,7 @@
 
 **FixForge turns a Python bug report into a patch you can verify and review.**
 
-The workbench runs the original test suite, reproduces the defect with a new regression, checks the patch, then restores the original code and confirms the same failure returns. Reviewers can inspect the diff, named test outcomes, and source revision before approving the exact patch or publishing it as a GitHub draft PR.
+The workbench runs the original test suite, reproduces the defect with a new regression, checks the patch, then restores the original code and confirms the same failure returns. Reviewers can inspect the diff, named test outcomes, and source revision before approving the exact patch. An approved repository repair can then be published as a GitHub draft PR.
 
 [Quick start](#quick-start) · [Four-case evaluation](examples/evaluation/README.md) · [Example draft PR](https://github.com/KrishnaBECOE07/Fixforge/pull/6) · [Architecture](docs/ARCHITECTURE.md)
 
@@ -34,7 +34,7 @@ cd ..
 
 On macOS/Linux, use `.venv/bin/python` and replace `npm.cmd` with `npm`.
 
-Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** and select **Try a live demo**. Open **Verification** to inspect the four gates, then **Code changes** to review the patch. The API reference is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** and select **Try a live demo**. Open **Test evidence** to inspect the four gates, then **Code changes** to review the patch. The API reference is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
 The app persists run history, test logs, source receipts and patch snapshots in `.fixforge/`. It binds to loopback and supports one local operator. Keep one server process running for each data directory.
 

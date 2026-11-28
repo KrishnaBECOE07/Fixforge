@@ -48,6 +48,26 @@ CASES = {
         "Limit changes to next_departure.",
     ),
 }
+REPRODUCTIONS = {
+    "shipment_count": ("stock", (13, 4), 4),
+    "restock_queue": ("stock", ([("alpha", 2), ("beta", 2), ("urgent", 3)],),
+                      [("urgent", 3), ("alpha", 2), ("beta", 2)]),
+    "normalize_zone": ("routing", (" north  west\tbay ",), "NORTH-WEST-BAY"),
+    "next_departure": ("routing", (10, [18, 9, 10]), 10),
+}
+
+
+def operator_regression(case: str) -> str:
+    module, arguments, expected = REPRODUCTIONS[case]
+    return f"""import unittest
+
+from {module} import {case}
+
+
+class IssueRegression(unittest.TestCase):
+    def test_issue_example(self):
+        self.assertEqual({case}(*{arguments!r}), {expected!r})
+"""
 
 
 def repair(client: TestClient, issue: dict) -> dict:
@@ -65,7 +85,8 @@ def repair(client: TestClient, issue: dict) -> dict:
         time.sleep(0.25)
 
 
-def evaluate_case(client: TestClient, output: Path, case: str, repository: Path, image: str) -> dict:
+def evaluate_case(client: TestClient, output: Path, case: str, repository: Path, image: str,
+                  *, operator_test: bool = False) -> dict:
     repo_id, title, body = CASES[case]
     workspace = shutil.copytree(repository, output / case, ignore=shutil.ignore_patterns("__pycache__"))
     private_test = (HERE / "acceptance" / f"{case}.py").read_bytes()
@@ -76,7 +97,10 @@ def evaluate_case(client: TestClient, output: Path, case: str, repository: Path,
     if not assess_baseline(control)["accepted"] or not reproduction["accepted"]:
         raise ValueError(f"{case}: the independent suite did not isolate the expected defect: {reproduction['reason']}")
 
-    run = repair(client, dict(repository_id=repo_id, title=title, body=body, provider="ollama"))
+    issue = dict(repository_id=repo_id, title=title, body=body, provider="ollama")
+    if operator_test:
+        issue["supplied_regression"] = operator_regression(case)
+    run = repair(client, issue)
     (output / f"{case}-run.json").write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
     verdict = run["status"] == "review" and run["integrity_valid"]
     after = None
@@ -89,6 +113,7 @@ def evaluate_case(client: TestClient, output: Path, case: str, repository: Path,
     acceptance = assess_patch(before, after) if after else None
     return dict(case=case, repository=repo_id, run_id=run["id"], status=run["status"], verified=verdict,
                 stop_reason=run["error"], stop_category=failure_category(run) if run["status"] == "failed" else None,
+                edit_format=(run.get("provider_record") or {}).get("edit_format"),
                 usage=(run.get("provider_record") or {}).get("usage"), duration_ms=run.get("duration_ms"),
                 source_sha256=run.get("source_sha256"), acceptance_test_sha256=hashlib.sha256(private_test).hexdigest(),
                 independent_before=before["report"], independent_after=after["report"] if after else None,
@@ -100,6 +125,7 @@ def main() -> None:
     parser.add_argument("--model", default=DEFAULT_OLLAMA_MODEL, help="A locally installed Ollama model")
     parser.add_argument("--image", default="python:3.11-slim", help="A pre-pulled Linux Docker image")
     parser.add_argument("--case", action="append", choices=CASES, help="Select a case. Repeat to select several.")
+    parser.add_argument("--operator-test", action="store_true", help="Supply a regression for the public issue example")
     parser.add_argument("--output", type=Path, default=Path(".fixforge/evaluation"))
     args = parser.parse_args()
 
@@ -115,13 +141,15 @@ def main() -> None:
                             inference_provider="ollama", ollama_model=args.model)
         cases = list(dict.fromkeys(args.case or CASES))
         report = dict(started_at=now(), provider="ollama", model=args.model, image_id=image,
+                      regression_origin="operator" if args.operator_test else "model",
                       architecture=architecture, limits=settings.inference_limits("ollama"),
                       requested_cases=cases, cases=[])
         print(f"Local trial directory: {output}", flush=True)
         with TestClient(create_app(settings)) as client:
             for case in cases:
                 print(f"Running {case}", flush=True)
-                row = evaluate_case(client, output, case, repositories[CASES[case][0]], image)
+                row = evaluate_case(client, output, case, repositories[CASES[case][0]], image,
+                                    operator_test=args.operator_test)
                 report["cases"].append(row)
                 (output / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
                 result = "independent tests passed" if row["resolved"] else row["stop_category"] or "independent tests failed"
